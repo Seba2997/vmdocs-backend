@@ -14,7 +14,7 @@ from app.services.usuario_service import (
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
 
-@router.post("/crearususario/", response_model=UsuarioResponse)
+@router.post("/crearusuario/", response_model=UsuarioResponse)
 def crear_usuario_endpoint(
     usuario: UsuarioCreate,
     db: Session = Depends(get_db)

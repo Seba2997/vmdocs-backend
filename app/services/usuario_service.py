@@ -44,7 +44,7 @@ def editar_usuario(db: Session, usuario_id: int, datos: UsuarioUpdate):
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    if datos.email and datos.email != usuario.email:
+    if datos.email is not None and datos.email != usuario.email:
         usuario_existente = db.query(Usuario).filter(
             Usuario.email == datos.email,
             Usuario.id != usuario_id
@@ -80,10 +80,7 @@ def cambiar_estado_usuario(db: Session, usuario_id: int):
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    usuario.estado = not bool(usuario.estado)
+    usuario.estado = not usuario.estado
     db.commit()
     db.refresh(usuario)
     return usuario
-
-
-
