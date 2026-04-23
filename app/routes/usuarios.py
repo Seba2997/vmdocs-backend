@@ -36,11 +36,13 @@ def obtener_usuario_endpoint(
 ):
     return mostrar_usuario(db, usuario_id)
 
+
 @router.get("/obtenertodos/", response_model=list[UsuarioResponse])
 def obtener_todos_usuarios_endpoint(
     db: Session = Depends(get_db)
 ):
     return mostrar_todos_usuarios(db)
+
 
 @router.patch("/cambiarestado/{usuario_id}", response_model=UsuarioResponse)
 def cambiar_estado_usuario_endpoint(
