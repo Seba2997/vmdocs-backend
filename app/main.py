@@ -3,6 +3,8 @@ from app.database import engine, Base, SessionLocal
 from app.models.usuario import Usuario
 from app.routes import usuarios, auth
 from app.utils.security import hash_password
+from app.models import cliente_model, caso_model
+from app.routes import usuarios, cliente_routes, caso_routes
 
 app = FastAPI()
 
@@ -31,6 +33,8 @@ def create_admin_user():
 
 app.include_router(usuarios.router)
 app.include_router(auth.router)
+app.include_router(cliente_routes.router)
+app.include_router(caso_routes.router)
 
 @app.get("/")
 def root():
