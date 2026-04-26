@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from datetime import datetime
 
 class ClienteBase(BaseModel):
     nombre: str
@@ -17,6 +18,8 @@ class ClienteUpdate(BaseModel):
 class ClienteResponse(ClienteBase):
     id: int
     estado: bool
+    fecha_creacion: Optional[datetime] = None
+    fecha_actualizacion: Optional[datetime] = None
 
     class Config:
         from_attributes = True

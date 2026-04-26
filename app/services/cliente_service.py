@@ -21,6 +21,10 @@ def obtener_clientes(db: Session):
     return db.query(Cliente).filter(Cliente.estado == True).all()
 
 
+def obtener_clientes_inactivos(db: Session):
+    return db.query(Cliente).filter(Cliente.estado == False).all()
+
+
 def obtener_cliente_por_id(db: Session, cliente_id: int):
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id, Cliente.estado == True).first()
     if not cliente:
