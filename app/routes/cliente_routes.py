@@ -30,6 +30,17 @@ def listar_clientes(db: Session = Depends(get_db)):
 
 
 @router.get(
+    "/obtener_inactivos",
+    response_model=List[ClienteResponse],
+    operation_id="listar_clientes_inactivos",
+    summary="Listar clientes inactivos",
+    description="Retorna todos los clientes con estado inactivo (desactivados) registrados en el sistema.",
+)
+def listar_clientes_inactivos(db: Session = Depends(get_db)):
+    return cliente_service.obtener_clientes_inactivos(db)
+
+
+@router.get(
     "/obtener_cliente/{cliente_id}",
     response_model=ClienteResponse,
     operation_id="obtener_cliente_por_id",
