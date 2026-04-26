@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioUpdate, UsuarioPasswordUpdate
+from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioUpdate, UsuarioPasswordUpdate, UsuarioRolUpdate
 from app.services.usuario_service import (
     crear_usuario,
     editar_usuario,
@@ -10,10 +10,10 @@ from app.services.usuario_service import (
     mostrar_usuario,
     cambiar_estado_usuario,
     cambiar_password,
+    cambiar_rol_usuario,
 )
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
-
 
 @router.post("/crearusuario/", response_model=UsuarioResponse)
 def crear_usuario_endpoint(
@@ -59,3 +59,11 @@ def cambiar_password_endpoint(
     db: Session = Depends(get_db)
 ):
     return cambiar_password(db, usuario_id, datos.password)
+
+@router.patch("/cambiarrol/{usuario_id}", response_model=UsuarioResponse)
+def cambiar_rol_endpoint(
+    usuario_id: int,
+    datos: UsuarioRolUpdate,
+    db: Session = Depends(get_db)
+):
+    return cambiar_rol_usuario(db, usuario_id, datos.rol)
