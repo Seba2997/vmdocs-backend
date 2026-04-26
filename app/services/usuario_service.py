@@ -67,6 +67,17 @@ def cambiar_estado_usuario(db: Session, usuario_id: int):
     db.refresh(usuario)
     return usuario
 
+def cambiar_rol_usuario(db: Session, usuario_id: int, nuevo_rol: str):
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    usuario.rol = nuevo_rol
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
 def cambiar_password(db: Session, usuario_id: int, password: str):
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
 
