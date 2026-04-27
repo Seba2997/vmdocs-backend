@@ -1,9 +1,10 @@
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from app.database import engine, Base, SessionLocal
 from app.models.usuario import Usuario
 from app.routes import usuarios, auth
 from app.utils.security import hash_password
-from app.models import cliente_model, caso_model
+from app.models import cliente_model, caso_model, caso_usuario_model
 from app.routes import usuarios, cliente_routes, caso_routes
 
 app = FastAPI()
@@ -36,6 +37,6 @@ app.include_router(auth.router)
 app.include_router(cliente_routes.router)
 app.include_router(caso_routes.router)
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
-    return {"message": "VMDocs API funcionando"}
+    return RedirectResponse(url="/docs")

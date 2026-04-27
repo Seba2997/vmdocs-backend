@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
@@ -13,4 +14,5 @@ class Usuario(Base):
     rol = Column(String, default="USER")
     estado = Column(Boolean, default=True)
 
-
+    # Relación ORM → tabla intermedia CasoUsuario (N:M explícito)
+    asignaciones = relationship("CasoUsuario", back_populates="usuario", cascade="all, delete-orphan")
