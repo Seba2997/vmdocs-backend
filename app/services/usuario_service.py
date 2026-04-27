@@ -16,6 +16,7 @@ def crear_usuario(db: Session, usuario: UsuarioCreate):
     
     nuevo_usuario = Usuario(
         nombre=usuario.nombre,
+        apellido=usuario.apellido,
         email=usuario.email,
         password=hash_password(usuario.password),
         rol=usuario.rol,
@@ -44,29 +45,10 @@ def editar_usuario(db: Session, usuario_id: int, datos: UsuarioUpdate):
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    if datos.email is not None and datos.email != usuario.email:
-        usuario_existente = db.query(Usuario).filter(
-            Usuario.email == datos.email,
-            Usuario.id != usuario_id
-        ).first()
-
-        if usuario_existente:
-            raise HTTPException(status_code=400, detail="El correo ya está registrado")
-
-    if datos.nombre is not None:
-        usuario.nombre = datos.nombre
-
-    if datos.email is not None:
-        usuario.email = datos.email
-
-    if datos.password is not None:
-        usuario.password = hash_password(datos.password)
-
-    if datos.rol is not None:
-        usuario.rol = datos.rol
-
-    if datos.estado is not None:
-        usuario.estado = datos.estado
+    update_data = datos.model_dump(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        setattr(usuario, key, value)
 
     db.commit()
     db.refresh(usuario)
@@ -84,3 +66,26 @@ def cambiar_estado_usuario(db: Session, usuario_id: int):
     db.commit()
     db.refresh(usuario)
     return usuario
+
+def cambiar_rol_usuario(db: Session, usuario_id: int, nuevo_rol: str):
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    usuario.rol = nuevo_rol
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
+def cambiar_password(db: Session, usuario_id: int, password: str):
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    usuario.password = hash_password(password)
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
