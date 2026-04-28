@@ -1,13 +1,26 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base, SessionLocal
-from app.models.usuario import Usuario
-from app.routes import usuarios, auth
+from app.models.usuario import Usuario, RolUsuario
 from app.utils.security import hash_password
 from app.models import cliente_model, caso_model, caso_usuario_model
-from app.routes import usuarios, cliente_routes, caso_routes
+from app.routes import usuarios, auth, cliente_routes, caso_routes
 
 app = FastAPI()
+
+# Orígenes permitidos — agregar la URL de producción del frontend cuando se despliegue
+ORIGINES_PERMITIDOS = [
+    "http://localhost:5173",  # Vite dev server
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ORIGINES_PERMITIDOS,
+    allow_credentials=True,  # necesario para enviar el header Authorization con el JWT
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,7 +37,7 @@ def create_admin_user():
                 apellido="Temporal",
                 email=admin_email,
                 password=hash_password("admin1234"),
-                rol="ADMIN",
+                rol=RolUsuario.ADMIN,
                 estado=True
             )
             db.add(nuevo_admin)

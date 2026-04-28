@@ -1,9 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from enum import Enum
 
-class RolUsuario(str, Enum):
-    ADMIN = "ADMIN"
-    USER = "USER"
+from app.models.usuario import RolUsuario  # fuente única de verdad
 
 # Clase create usuario para crear usuario 
 class UsuarioCreate(BaseModel):
