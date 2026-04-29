@@ -28,5 +28,8 @@ class Caso(Base):
     # FK → Cliente
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
 
-    # Relación ORM
+    # Relación ORM → Cliente
     cliente = relationship("Cliente", back_populates="casos")
+
+    # Relación ORM → tabla intermedia CasoUsuario (N:M explícito)
+    asignaciones = relationship("CasoUsuario", back_populates="caso", cascade="all, delete-orphan")
