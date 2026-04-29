@@ -123,4 +123,4 @@ def toggle_estado_cliente(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(requerir_rol("ADMIN")),
 ):
-    return cliente_service.toggle_estado_cliente(db, cliente_id)
+    return cliente_service.toggle_estado_cliente(db, cliente_id)
