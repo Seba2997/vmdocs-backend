@@ -61,7 +61,7 @@ def cambiar_estado_usuario_endpoint(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(requerir_rol("ADMIN"))
 ):
-    return cambiar_estado_usuario(db, usuario_id)
+    return cambiar_estado_usuario(db, usuario_id, current_user.id)
 
 @router.patch("/cambiarpassword/{usuario_id}", response_model=UsuarioResponse)
 def cambiar_password_endpoint(
@@ -70,9 +70,8 @@ def cambiar_password_endpoint(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo)
 ):
-    if current_user.rol != "ADMIN" and current_user.id != usuario_id:
-        raise HTTPException(status_code=403, detail="No tienes permisos para cambiar el password de este usuario")
-    return cambiar_password(db, usuario_id, datos.password)
+    # La validación de que sea el mismo usuario se hace ahora en el service
+    return cambiar_password(db, usuario_id, datos.password, current_user.id)
 
 @router.patch("/cambiarrol/{usuario_id}", response_model=UsuarioResponse)
 def cambiar_rol_endpoint(
