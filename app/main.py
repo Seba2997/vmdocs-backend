@@ -12,6 +12,8 @@ app = FastAPI()
 # Orígenes permitidos — agregar la URL de producción del frontend cuando se despliegue
 ORIGINES_PERMITIDOS = [
     "http://localhost:5173",  # Vite dev server
+    "http://localhost:8000",  # Swagger local
+    "http://127.0.0.1:8000",  # Swagger local alternativo
 ]
 
 app.add_middleware(
@@ -34,9 +36,9 @@ def create_admin_user():
         if not admin_user:
             nuevo_admin = Usuario(
                 nombre="Admin",
-                apellido="Temporal",
+                apellido="Maestro",
                 email=admin_email,
-                password=hash_password("admin1234"),
+                password=hash_password("Admin123*"),
                 rol=RolUsuario.ADMIN,
                 estado=True
             )

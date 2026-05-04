@@ -8,7 +8,7 @@ class UsuarioCreate(BaseModel):
     nombre: str
     apellido: str
     email: EmailStr
-    password: str = Field(min_length=8, max_length=50)
+    password: str
     rol: RolUsuario = RolUsuario.USER
     estado: bool = True
 
@@ -19,7 +19,7 @@ class UsuarioUpdate(BaseModel):
     email: EmailStr | None = None
 
 class UsuarioPasswordUpdate(BaseModel):
-    password: str = Field(min_length=8, max_length=50)
+    password: str
 
 class UsuarioRolUpdate(BaseModel):
     rol: RolUsuario
@@ -35,4 +35,4 @@ class UsuarioResponse(BaseModel):
 
     # Para que Pydantic trabaje con SQLAlchemy
     class Config:
-        from_attributes = True
+        from_attributes = True
