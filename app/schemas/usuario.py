@@ -35,4 +35,4 @@ class UsuarioResponse(BaseModel):
 
     # Para que Pydantic trabaje con SQLAlchemy
     class Config:
-        from_attributes = True
+        from_attributes = True
