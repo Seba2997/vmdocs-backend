@@ -1,23 +1,27 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioUpdate
+from app.models.usuario import Usuario
+from app.utils.jwt_security import requerir_rol, obtener_usuario_actual_activo
+from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioUpdate, UsuarioPasswordUpdate, UsuarioRolUpdate
 from app.services.usuario_service import (
     crear_usuario,
     editar_usuario,
     mostrar_todos_usuarios,
     mostrar_usuario,
     cambiar_estado_usuario,
+    cambiar_password,
+    cambiar_rol_usuario,
 )
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
-
 @router.post("/crearusuario/", response_model=UsuarioResponse)
 def crear_usuario_endpoint(
     usuario: UsuarioCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(requerir_rol("ADMIN"))
 ):
     return crear_usuario(db, usuario)
 
@@ -25,26 +29,55 @@ def crear_usuario_endpoint(
 def editar_usuario_endpoint(
     usuario_id: int,
     datos: UsuarioUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(obtener_usuario_actual_activo)
 ):
+    if current_user.rol != "ADMIN" and current_user.id != usuario_id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para editar este usuario")
     return editar_usuario(db, usuario_id, datos)
 
 @router.get("/obtenerusuario/{usuario_id}", response_model=UsuarioResponse)
 def obtener_usuario_endpoint(
     usuario_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(obtener_usuario_actual_activo)
 ):
+    if current_user.rol != "ADMIN" and current_user.id != usuario_id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver este usuario")
     return mostrar_usuario(db, usuario_id)
+
 
 @router.get("/obtenertodos/", response_model=list[UsuarioResponse])
 def obtener_todos_usuarios_endpoint(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(requerir_rol("ADMIN"))
 ):
     return mostrar_todos_usuarios(db)
+
 
 @router.patch("/cambiarestado/{usuario_id}", response_model=UsuarioResponse)
 def cambiar_estado_usuario_endpoint(
     usuario_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(requerir_rol("ADMIN"))
 ):
-    return cambiar_estado_usuario(db, usuario_id)
+    return cambiar_estado_usuario(db, usuario_id, current_user.id)
+
+@router.patch("/cambiarpassword/{usuario_id}", response_model=UsuarioResponse)
+def cambiar_password_endpoint(
+    usuario_id: int,
+    datos: UsuarioPasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(obtener_usuario_actual_activo)
+):
+    # La validación de que sea el mismo usuario se hace ahora en el service
+    return cambiar_password(db, usuario_id, datos.password, current_user.id)
+
+@router.patch("/cambiarrol/{usuario_id}", response_model=UsuarioResponse)
+def cambiar_rol_endpoint(
+    usuario_id: int,
+    datos: UsuarioRolUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(requerir_rol("ADMIN"))
+):
+    return cambiar_rol_usuario(db, usuario_id, datos.rol)

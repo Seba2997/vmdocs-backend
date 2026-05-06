@@ -1,26 +1,38 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
+from enum import Enum
 
+from app.models.usuario import RolUsuario  # fuente única de verdad
+
+# Clase create usuario para crear usuario 
 class UsuarioCreate(BaseModel):
     nombre: str
-    email: str
+    apellido: str
+    email: EmailStr
     password: str
-    rol: str = "USER"
+    rol: RolUsuario = RolUsuario.USER
     estado: bool = True
 
-
+# Clase update usuario para cambios parciales
 class UsuarioUpdate(BaseModel):
     nombre: str | None = None
-    email: str | None = None
-    password: str | None = None
-    rol: str | None = None
-    estado: bool | None = None
+    apellido: str | None = None
+    email: EmailStr | None = None
 
+class UsuarioPasswordUpdate(BaseModel):
+    password: str
+
+class UsuarioRolUpdate(BaseModel):
+    rol: RolUsuario
+
+# Clase respuesta para mostrar usuario 
 class UsuarioResponse(BaseModel):
     id: int
     nombre: str
-    email: str
-    rol: str
+    apellido: str
+    email: EmailStr
+    rol: RolUsuario
     estado: bool
 
+    # Para que Pydantic trabaje con SQLAlchemy
     class Config:
         from_attributes = True
