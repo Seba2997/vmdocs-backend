@@ -186,6 +186,17 @@ def obtener_documentos_por_caso(db: Session, caso_id: int) -> list[Documento]:
     )
 
 
+def obtener_documentos_inactivos_por_caso(db: Session, caso_id: int) -> list[Documento]:
+    """Retorna los documentos inactivos (eliminados logicamente) de un caso activo."""
+    _obtener_caso_activo_o_404(db, caso_id)
+    return (
+        db.query(Documento)
+        .filter(Documento.caso_id == caso_id, Documento.activo == False)
+        .order_by(Documento.fecha_subida.desc())
+        .all()
+    )
+
+
 def obtener_documento_por_id(db: Session, documento_id: int) -> Documento:
     """Retorna un documento activo por su ID."""
     return _obtener_documento_activo_o_404(db, documento_id)
@@ -224,21 +235,105 @@ def generar_signed_url(db: Session, documento_id: int) -> dict:
 
 
 # ─────────────────────────────────────────────
-# SOFT DELETE
+# SOFT DELETE / PAPELERA
 # ─────────────────────────────────────────────
 
-def toggle_estado_documento(db: Session, documento_id: int) -> dict:
+def toggle_estado_documento(
+    db: Session,
+    documento_id: int,
+    usuario_solicitante_id: int | None = None,
+) -> dict:
     """
     Cambia el campo 'activo' del documento de forma alternada (toggle).
-    Solo ADMIN puede invocar este endpoint.
+    Envía el documento a la papelera del caso (activo=False) o lo restaura (activo=True).
+
+    Permisos:
+      - ADMIN (usuario_solicitante_id=None): puede hacer toggle de cualquier documento.
+      - USER  (usuario_solicitante_id=<id>): solo puede hacer toggle de documentos
+        que él mismo haya subido (doc.usuario_id == usuario_solicitante_id).
     """
     doc = db.query(Documento).filter(Documento.id == documento_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado.")
 
+    # Verificar propiedad si es un usuario normal
+    if usuario_solicitante_id is not None and doc.usuario_id != usuario_solicitante_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permiso para modificar este documento. Solo puedes gestionar los archivos que tú subiste.",
+        )
+
     doc.activo = not doc.activo
     db.commit()
     db.refresh(doc)
 
-    estado_texto = "activado" if doc.activo else "desactivado"
+    estado_texto = "restaurado" if doc.activo else "enviado a la papelera"
     return {"mensaje": f"Documento {estado_texto}.", "activo": doc.activo}
+
+
+# ─────────────────────────────────────────────
+# ELIMINACIÓN DEFINITIVA
+# ─────────────────────────────────────────────
+
+def eliminar_definitivamente(
+    db: Session,
+    documento_id: int,
+    usuario_solicitante_id: int | None = None,
+) -> dict:
+    """
+    Elimina de forma irreversible un documento que ya esté en la papelera
+    (activo=False). Borra el archivo del bucket de Supabase y luego el
+    registro de PostgreSQL.
+
+    Permisos:
+      - ADMIN (usuario_solicitante_id=None): puede eliminar cualquier documento.
+      - USER  (usuario_solicitante_id=<id>): solo puede eliminar documentos
+        que él mismo haya subido (doc.usuario_id == usuario_solicitante_id).
+
+    Pasos:
+      1. Verificar que el documento existe y está inactivo (en papelera).
+      2. Si es USER, verificar que es el propietario del documento.
+      3. Eliminar el archivo del bucket de Supabase.
+      4. Eliminar el registro de la base de datos.
+    """
+    # 1. Verificar existencia e inactividad
+    doc = db.query(Documento).filter(Documento.id == documento_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado.")
+    if doc.activo:
+        raise HTTPException(
+            status_code=409,
+            detail="El documento está activo. Envíalo a la papelera antes de eliminarlo definitivamente.",
+        )
+
+    # 2. Verificar propiedad si es un usuario normal
+    if usuario_solicitante_id is not None and doc.usuario_id != usuario_solicitante_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permiso para eliminar este documento. Solo puedes eliminar los archivos que tú subiste.",
+        )
+
+    nombre_storage = doc.nombre_storage
+
+    # 3. Eliminar del bucket de Supabase
+    supabase = _get_supabase()
+    try:
+        supabase.storage.from_(SUPABASE_BUCKET).remove([nombre_storage])
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Error al eliminar el archivo del almacenamiento: {exc}",
+        )
+
+    # 4. Eliminar el registro de PostgreSQL
+    try:
+        db.delete(doc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="El archivo se eliminó del almacenamiento pero no se pudo borrar el registro. Contacte al administrador.",
+        )
+
+    return {"mensaje": f"Documento '{doc.nombre_original}' eliminado definitivamente."}
