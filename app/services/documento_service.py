@@ -107,7 +107,7 @@ def verificar_acceso_a_caso_o_403(db: Session, usuario_id: int, caso_id: int) ->
 # SUBIDA
 # ─────────────────────────────────────────────
 
-async def subir_documento(
+def subir_documento(
     db: Session,
     caso_id: int,
     usuario_id: int,
@@ -116,12 +116,15 @@ async def subir_documento(
     """
     Valida el archivo, lo sube a Supabase Storage y persiste la metadata
     en PostgreSQL dentro de una sola operación cohesiva.
+    Al ser una función síncrona (def en vez de async def), FastAPI la ejecuta
+    en un thread pool, evitando bloquear el event loop principal durante la
+    subida a Supabase.
     """
     # 1. Validar que el caso existe y está activo
     _obtener_caso_activo_o_404(db, caso_id)
 
     # 2. Leer contenido para conocer el tamaño real
-    contenido = await archivo.read()
+    contenido = archivo.file.read()
     tamano = len(contenido)
 
     # 3. Validar archivo (MIME, extensión, tamaño)

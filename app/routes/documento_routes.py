@@ -31,7 +31,7 @@ router = APIRouter(prefix="/documentos", tags=["Documentos"])
     ),
     status_code=201,
 )
-async def subir_documento(
+def subir_documento(
     caso_id: int,
     archivo: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -40,7 +40,7 @@ async def subir_documento(
     if current_user.rol != "ADMIN":
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
 
-    return await documento_service.subir_documento(
+    return documento_service.subir_documento(
         db=db,
         caso_id=caso_id,
         usuario_id=current_user.id,
