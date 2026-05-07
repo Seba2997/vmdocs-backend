@@ -12,8 +12,8 @@ if not SECRET_KEY:
 
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
-# Intentamos obtener el tiempo de expiración desde .env, si no, por defecto 60 minutos
+# Intentamos obtener el tiempo de expiración desde .env, si no, por defecto 1440 minutos (24 horas)
 try:
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 except ValueError:
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES = 1440
