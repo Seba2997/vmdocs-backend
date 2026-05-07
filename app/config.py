@@ -21,6 +21,12 @@ TAMANO_MAXIMO_BYTES: int = int(os.getenv("TAMANO_MAXIMO_MB", "10")) * 1024 * 102
 TIPOS_MIME_PERMITIDOS: dict[str, str] = {
     ".pdf": "application/pdf",
     ".csv": "text/csv",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
 }
 
 if not SUPABASE_URL or not SUPABASE_KEY:

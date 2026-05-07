@@ -1,4 +1,7 @@
 import uuid
+import io
+import csv
+from openpyxl import Workbook
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -107,7 +110,7 @@ def verificar_acceso_a_caso_o_403(db: Session, usuario_id: int, caso_id: int) ->
 # SUBIDA
 # ─────────────────────────────────────────────
 
-async def subir_documento(
+def subir_documento(
     db: Session,
     caso_id: int,
     usuario_id: int,
@@ -116,20 +119,60 @@ async def subir_documento(
     """
     Valida el archivo, lo sube a Supabase Storage y persiste la metadata
     en PostgreSQL dentro de una sola operación cohesiva.
+    Al ser una función síncrona (def en vez de async def), FastAPI la ejecuta
+    en un thread pool, evitando bloquear el event loop principal durante la
+    subida a Supabase.
     """
     # 1. Validar que el caso existe y está activo
     _obtener_caso_activo_o_404(db, caso_id)
 
     # 2. Leer contenido para conocer el tamaño real
-    contenido = await archivo.read()
+    contenido = archivo.file.read()
     tamano = len(contenido)
 
     # 3. Validar archivo (MIME, extensión, tamaño)
     _validar_archivo(archivo, tamano)
 
-    # 4. Generar nombre único en storage: casos/{caso_id}/{uuid}.{ext}
+    # 4. Generar nombre único en storage y capturar info original
     nombre_original = archivo.filename or "archivo"
     extension = nombre_original.rsplit(".", 1)[-1].lower() if "." in nombre_original else "bin"
+    content_type = archivo.content_type
+
+    # TRANSFORMACIÓN CSV -> XLSX
+    if extension == "csv":
+        try:
+            # Decodificar el CSV manejando posible BOM (muy común en archivos generados en Windows)
+            text_content = contenido.decode('utf-8-sig')
+            
+            # Usar un método más robusto que el Sniffer para el delimitador (que a veces falla)
+            # En Latinoamérica Excel exporta CSVs con ';' en lugar de ','.
+            delimitador = ';' if text_content.count(';') > text_content.count(',') else ','
+            
+            csv_reader = csv.reader(io.StringIO(text_content), delimiter=delimitador)
+            
+            wb = Workbook()
+            ws = wb.active
+            for row in csv_reader:
+                ws.append(row)
+                
+            out_stream = io.BytesIO()
+            wb.save(out_stream)
+            
+            # Actualizar las variables para guardar el Excel generado en lugar del CSV
+            contenido = out_stream.getvalue()
+            tamano = len(contenido)
+            extension = "xlsx"
+            content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            
+            # Modificar el nombre original para que la BD refleje que ahora es un Excel
+            nombre_original = nombre_original.rsplit(".", 1)[0] + ".xlsx"
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No se pudo procesar y transformar el archivo CSV a Excel: {str(e)}"
+            )
+
     nombre_storage = f"casos/{caso_id}/{uuid.uuid4()}.{extension}"
 
     # 5. Subir a Supabase Storage
@@ -138,7 +181,7 @@ async def subir_documento(
         supabase.storage.from_(SUPABASE_BUCKET).upload(
             path=nombre_storage,
             file=contenido,
-            file_options={"content-type": archivo.content_type},
+            file_options={"content-type": content_type},
         )
     except Exception as exc:
         raise HTTPException(
@@ -186,6 +229,17 @@ def obtener_documentos_por_caso(db: Session, caso_id: int) -> list[Documento]:
     )
 
 
+def obtener_documentos_inactivos_por_caso(db: Session, caso_id: int) -> list[Documento]:
+    """Retorna los documentos inactivos (eliminados logicamente) de un caso activo."""
+    _obtener_caso_activo_o_404(db, caso_id)
+    return (
+        db.query(Documento)
+        .filter(Documento.caso_id == caso_id, Documento.activo == False)
+        .order_by(Documento.fecha_subida.desc())
+        .all()
+    )
+
+
 def obtener_documento_por_id(db: Session, documento_id: int) -> Documento:
     """Retorna un documento activo por su ID."""
     return _obtener_documento_activo_o_404(db, documento_id)
@@ -198,18 +252,21 @@ def obtener_documento_por_id(db: Session, documento_id: int) -> Documento:
 SIGNED_URL_EXPIRACION = 300  # segundos (5 minutos)
 
 
-def generar_signed_url(db: Session, documento_id: int) -> dict:
+def generar_signed_url(db: Session, documento_id: int, modo: str = "descargar") -> dict:
     """
-    Genera una URL temporal de Supabase para descargar el documento.
+    Genera una URL temporal de Supabase para descargar o ver el documento.
     NO usa URLs públicas permanentes.
     """
     doc = _obtener_documento_activo_o_404(db, documento_id)
     supabase = _get_supabase()
 
+    opciones = {"download": doc.nombre_original} if modo == "descargar" else {}
+
     try:
         respuesta = supabase.storage.from_(SUPABASE_BUCKET).create_signed_url(
             path=doc.nombre_storage,
             expires_in=SIGNED_URL_EXPIRACION,
+            options=opciones,
         )
         signed_url = respuesta.get("signedURL") or respuesta.get("signedUrl")
         if not signed_url:
@@ -224,21 +281,105 @@ def generar_signed_url(db: Session, documento_id: int) -> dict:
 
 
 # ─────────────────────────────────────────────
-# SOFT DELETE
+# SOFT DELETE / PAPELERA
 # ─────────────────────────────────────────────
 
-def toggle_estado_documento(db: Session, documento_id: int) -> dict:
+def toggle_estado_documento(
+    db: Session,
+    documento_id: int,
+    usuario_solicitante_id: int | None = None,
+) -> dict:
     """
     Cambia el campo 'activo' del documento de forma alternada (toggle).
-    Solo ADMIN puede invocar este endpoint.
+    Envía el documento a la papelera del caso (activo=False) o lo restaura (activo=True).
+
+    Permisos:
+      - ADMIN (usuario_solicitante_id=None): puede hacer toggle de cualquier documento.
+      - USER  (usuario_solicitante_id=<id>): solo puede hacer toggle de documentos
+        que él mismo haya subido (doc.usuario_id == usuario_solicitante_id).
     """
     doc = db.query(Documento).filter(Documento.id == documento_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado.")
 
+    # Verificar propiedad si es un usuario normal
+    if usuario_solicitante_id is not None and doc.usuario_id != usuario_solicitante_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permiso para modificar este documento. Solo puedes gestionar los archivos que tú subiste.",
+        )
+
     doc.activo = not doc.activo
     db.commit()
     db.refresh(doc)
 
-    estado_texto = "activado" if doc.activo else "desactivado"
+    estado_texto = "restaurado" if doc.activo else "enviado a la papelera"
     return {"mensaje": f"Documento {estado_texto}.", "activo": doc.activo}
+
+
+# ─────────────────────────────────────────────
+# ELIMINACIÓN DEFINITIVA
+# ─────────────────────────────────────────────
+
+def eliminar_definitivamente(
+    db: Session,
+    documento_id: int,
+    usuario_solicitante_id: int | None = None,
+) -> dict:
+    """
+    Elimina de forma irreversible un documento que ya esté en la papelera
+    (activo=False). Borra el archivo del bucket de Supabase y luego el
+    registro de PostgreSQL.
+
+    Permisos:
+      - ADMIN (usuario_solicitante_id=None): puede eliminar cualquier documento.
+      - USER  (usuario_solicitante_id=<id>): solo puede eliminar documentos
+        que él mismo haya subido (doc.usuario_id == usuario_solicitante_id).
+
+    Pasos:
+      1. Verificar que el documento existe y está inactivo (en papelera).
+      2. Si es USER, verificar que es el propietario del documento.
+      3. Eliminar el archivo del bucket de Supabase.
+      4. Eliminar el registro de la base de datos.
+    """
+    # 1. Verificar existencia e inactividad
+    doc = db.query(Documento).filter(Documento.id == documento_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado.")
+    if doc.activo:
+        raise HTTPException(
+            status_code=409,
+            detail="El documento está activo. Envíalo a la papelera antes de eliminarlo definitivamente.",
+        )
+
+    # 2. Verificar propiedad si es un usuario normal
+    if usuario_solicitante_id is not None and doc.usuario_id != usuario_solicitante_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permiso para eliminar este documento. Solo puedes eliminar los archivos que tú subiste.",
+        )
+
+    nombre_storage = doc.nombre_storage
+
+    # 3. Eliminar del bucket de Supabase
+    supabase = _get_supabase()
+    try:
+        supabase.storage.from_(SUPABASE_BUCKET).remove([nombre_storage])
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Error al eliminar el archivo del almacenamiento: {exc}",
+        )
+
+    # 4. Eliminar el registro de PostgreSQL
+    try:
+        db.delete(doc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="El archivo se eliminó del almacenamiento pero no se pudo borrar el registro. Contacte al administrador.",
+        )
+
+    return {"mensaje": f"Documento '{doc.nombre_original}' eliminado definitivamente."}
