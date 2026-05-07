@@ -1,4 +1,7 @@
 import uuid
+import io
+import csv
+from openpyxl import Workbook
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -130,9 +133,46 @@ def subir_documento(
     # 3. Validar archivo (MIME, extensión, tamaño)
     _validar_archivo(archivo, tamano)
 
-    # 4. Generar nombre único en storage: casos/{caso_id}/{uuid}.{ext}
+    # 4. Generar nombre único en storage y capturar info original
     nombre_original = archivo.filename or "archivo"
     extension = nombre_original.rsplit(".", 1)[-1].lower() if "." in nombre_original else "bin"
+    content_type = archivo.content_type
+
+    # TRANSFORMACIÓN CSV -> XLSX
+    if extension == "csv":
+        try:
+            # Decodificar el CSV manejando posible BOM (muy común en archivos generados en Windows)
+            text_content = contenido.decode('utf-8-sig')
+            
+            # Usar un método más robusto que el Sniffer para el delimitador (que a veces falla)
+            # En Latinoamérica Excel exporta CSVs con ';' en lugar de ','.
+            delimitador = ';' if text_content.count(';') > text_content.count(',') else ','
+            
+            csv_reader = csv.reader(io.StringIO(text_content), delimiter=delimitador)
+            
+            wb = Workbook()
+            ws = wb.active
+            for row in csv_reader:
+                ws.append(row)
+                
+            out_stream = io.BytesIO()
+            wb.save(out_stream)
+            
+            # Actualizar las variables para guardar el Excel generado en lugar del CSV
+            contenido = out_stream.getvalue()
+            tamano = len(contenido)
+            extension = "xlsx"
+            content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            
+            # Modificar el nombre original para que la BD refleje que ahora es un Excel
+            nombre_original = nombre_original.rsplit(".", 1)[0] + ".xlsx"
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No se pudo procesar y transformar el archivo CSV a Excel: {str(e)}"
+            )
+
     nombre_storage = f"casos/{caso_id}/{uuid.uuid4()}.{extension}"
 
     # 5. Subir a Supabase Storage
@@ -141,7 +181,7 @@ def subir_documento(
         supabase.storage.from_(SUPABASE_BUCKET).upload(
             path=nombre_storage,
             file=contenido,
-            file_options={"content-type": archivo.content_type},
+            file_options={"content-type": content_type},
         )
     except Exception as exc:
         raise HTTPException(
@@ -212,18 +252,21 @@ def obtener_documento_por_id(db: Session, documento_id: int) -> Documento:
 SIGNED_URL_EXPIRACION = 300  # segundos (5 minutos)
 
 
-def generar_signed_url(db: Session, documento_id: int) -> dict:
+def generar_signed_url(db: Session, documento_id: int, modo: str = "descargar") -> dict:
     """
-    Genera una URL temporal de Supabase para descargar el documento.
+    Genera una URL temporal de Supabase para descargar o ver el documento.
     NO usa URLs públicas permanentes.
     """
     doc = _obtener_documento_activo_o_404(db, documento_id)
     supabase = _get_supabase()
 
+    opciones = {"download": doc.nombre_original} if modo == "descargar" else {}
+
     try:
         respuesta = supabase.storage.from_(SUPABASE_BUCKET).create_signed_url(
             path=doc.nombre_storage,
             expires_in=SIGNED_URL_EXPIRACION,
+            options=opciones,
         )
         signed_url = respuesta.get("signedURL") or respuesta.get("signedUrl")
         if not signed_url:

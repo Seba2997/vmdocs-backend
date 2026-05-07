@@ -25,8 +25,8 @@ router = APIRouter(prefix="/documentos", tags=["Documentos"])
     operation_id="subir_documento",
     summary="Subir documento",
     description=(
-        "Sube un archivo PDF o CSV al almacenamiento de Supabase y persiste su "
-        "metadata en PostgreSQL. El usuario queda registrado como quien subio el archivo. "
+        "Sube un archivo (PDF, CSV, Word, Excel, JPG, PNG) al almacenamiento de Supabase "
+        "y persiste su metadata en PostgreSQL. El usuario queda registrado como quien subio el archivo. "
         "ADMIN: acceso total. USER: solo si esta asignado al caso."
     ),
     status_code=201,
@@ -130,15 +130,17 @@ def obtener_documento(
     "/descargar/{documento_id}",
     response_model=DocumentoDescargaResponse,
     operation_id="descargar_documento",
-    summary="Obtener URL de descarga temporal",
+    summary="Obtener URL temporal (ver/descargar)",
     description=(
         "Genera una signed URL temporal de Supabase Storage (valida 5 minutos). "
+        "Acepta un query parameter ?modo=descargar (por defecto) o ?modo=ver. "
         "No expone URLs publicas permanentes. "
         "ADMIN: acceso total. USER: solo si esta asignado al caso del documento."
     ),
 )
 def descargar_documento(
     documento_id: int,
+    modo: str = "descargar",
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
@@ -147,7 +149,7 @@ def descargar_documento(
     if current_user.rol != "ADMIN":
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, doc.caso_id)
 
-    return documento_service.generar_signed_url(db, documento_id)
+    return documento_service.generar_signed_url(db, documento_id, modo)
 
 
 # --------------------------------------------------
