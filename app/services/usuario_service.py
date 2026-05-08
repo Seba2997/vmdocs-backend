@@ -7,10 +7,7 @@ from app.schemas.usuario import UsuarioCreate, UsuarioUpdate
 from app.utils.security import hash_password
 
 def validar_password_segura(password: str):
-    """
-    Valida que la contraseña cumpla con los requisitos mínimos
-    y lanza errores específicos para cada caso.
-    """
+    """Valida los requisitos de la contraseña."""
     if len(password) < 8:
         raise HTTPException(
             status_code=400, 
@@ -92,14 +89,14 @@ def editar_usuario(db: Session, usuario_id: int, datos: UsuarioUpdate):
 
 def cambiar_estado_usuario(db: Session, usuario_id: int, ejecutor_id: int):
 
-    # Regla: No se puede cambiar el estado del Administrador Maestro (ID 1)
+    # Administrador Maestro no se puede desactivar
     if usuario_id == 1:
         raise HTTPException(
             status_code=403, 
             detail="El Administrador Maestro no puede ser desactivado por razones de seguridad."
         )
 
-    # Regla: Ningún usuario puede cambiar su propio estado (autodesactivación)
+    # No se puede desactivar a sí mismo
     if usuario_id == ejecutor_id:
         raise HTTPException(
             status_code=403, 
@@ -128,7 +125,7 @@ def cambiar_rol_usuario(db: Session, usuario_id: int, nuevo_rol: str):
     return usuario
 
 def cambiar_password(db: Session, usuario_id: int, password: str, ejecutor_id: int):
-    # Regla: Solo el propio usuario puede cambiar su contraseña
+    # Solo el usuario puede cambiar su contraseña
     if usuario_id != ejecutor_id:
         raise HTTPException(
             status_code=403, 

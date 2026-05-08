@@ -5,11 +5,11 @@ from app.database import engine, Base, SessionLocal
 from app.models.usuario import Usuario, RolUsuario
 from app.utils.security import hash_password
 from app.models import cliente_model, caso_model, caso_usuario_model, documento_model
-from app.routes import usuarios, auth, cliente_routes, caso_routes, documento_routes
+from app.routes import usuarios, auth, cliente_routes, caso_routes, documento_routes, ia_routes
 
 app = FastAPI()
 
-# Orígenes permitidos — agregar la URL de producción del frontend cuando se despliegue
+# Orígenes permitidos (CORS)
 ORIGINES_PERMITIDOS = [
     "http://localhost:5173",  # Vite dev server
     "http://localhost:8000",  # Swagger local
@@ -26,7 +26,7 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
-#Usuario ADMIN temporal para pruebas
+# Admin temporal para pruebas
 @app.on_event("startup")
 def create_admin_user():
     db = SessionLocal()
@@ -52,6 +52,7 @@ app.include_router(auth.router)
 app.include_router(cliente_routes.router)
 app.include_router(caso_routes.router)
 app.include_router(documento_routes.router)
+app.include_router(ia_routes.router)
 
 @app.get("/", include_in_schema=False)
 def root():

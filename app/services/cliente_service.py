@@ -12,11 +12,7 @@ from app.schemas.cliente_schema import ClienteCreate, ClienteUpdate
 # ─────────────────────────────────────────────
 
 def usuario_tiene_acceso_a_cliente(db: Session, usuario_id: int, cliente_id: int) -> bool:
-    """
-    Verifica si un usuario tiene acceso a un cliente específico.
-    El acceso se concede si el usuario está asignado a al menos un caso
-    activo de ese cliente (dos saltos: cliente → caso → caso_usuario).
-    """
+    """Verifica si un usuario tiene acceso a un cliente."""
     resultado = (
         db.query(CasoUsuario)
         .join(Caso, Caso.id == CasoUsuario.caso_id)
@@ -31,9 +27,7 @@ def usuario_tiene_acceso_a_cliente(db: Session, usuario_id: int, cliente_id: int
 
 
 def verificar_acceso_a_cliente_o_403(db: Session, usuario_id: int, cliente_id: int) -> None:
-    """
-    Lanza 403 si el usuario no tiene ningún caso asignado para el cliente indicado.
-    """
+    """Lanza 403 si el usuario no tiene acceso al cliente."""
     if not usuario_tiene_acceso_a_cliente(db, usuario_id, cliente_id):
         raise HTTPException(
             status_code=403,
@@ -65,11 +59,7 @@ def obtener_clientes_admin(db: Session) -> list[Cliente]:
 
 
 def obtener_clientes_por_usuario(db: Session, usuario_id: int) -> list[Cliente]:
-    """
-    Retorna los clientes activos que tienen al menos un caso activo
-    donde el usuario está asignado.
-    Usa JOIN de dos saltos: Cliente → Caso → CasoUsuario.
-    """
+    """Retorna clientes activos con casos asignados al usuario."""
     clientes = (
         db.query(Cliente)
         .join(Caso, Caso.cliente_id == Cliente.id)
