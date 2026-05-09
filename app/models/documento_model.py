@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, BigInteger, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, BigInteger, ForeignKey, DateTime, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -22,6 +22,13 @@ class Documento(Base):
 
     # FK → Usuario (quién subió el documento)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=False)
+
+    # Resultados IA (caché)
+    # Solo PDFs con texto (no imágenes)
+    texto_extraido = Column(Text, nullable=True)   # texto plano extraído del PDF
+    resumen_ia     = Column(Text,     nullable=True)   # resumen generado por Gemini
+    ficha_ia       = Column(JSON,     nullable=True)   # ficha estructurada (dict)
+    ia_generado_en = Column(DateTime(timezone=True), nullable=True)  # última vez generado
 
     # Relaciones ORM
     caso    = relationship("Caso",    backref="documentos")

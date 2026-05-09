@@ -5,11 +5,7 @@ from app.database import Base
 
 
 class CasoUsuario(Base):
-    """
-    Tabla intermedia explícita para la relación N:M entre Caso y Usuario.
-    Un caso puede tener múltiples usuarios asignados,
-    y un usuario puede estar asignado a múltiples casos.
-    """
+    """Tabla intermedia N:M entre Caso y Usuario."""
     __tablename__ = "caso_usuario"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -17,7 +13,7 @@ class CasoUsuario(Base):
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     fecha_asignacion = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Restricción única: un usuario no puede estar asignado dos veces al mismo caso
+    # Un usuario solo puede asignarse una vez al caso
     __table_args__ = (
         UniqueConstraint("caso_id", "usuario_id", name="uq_caso_usuario"),
     )
