@@ -4,8 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base, SessionLocal
 from app.models.usuario import Usuario, RolUsuario
 from app.utils.security import hash_password
-from app.models import cliente_model, caso_model, caso_usuario_model, documento_model
-from app.routes import usuarios, auth, cliente_routes, caso_routes, documento_routes, ia_routes
+from app.routes import usuarios, auth, cliente_routes, caso_routes, documento_routes, ia_routes, password_reset_routes
 
 app = FastAPI()
 
@@ -53,6 +52,8 @@ app.include_router(cliente_routes.router)
 app.include_router(caso_routes.router)
 app.include_router(documento_routes.router)
 app.include_router(ia_routes.router)
+app.include_router(password_reset_routes.router)
+
 
 @app.get("/", include_in_schema=False)
 def root():
