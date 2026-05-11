@@ -3,6 +3,8 @@ from fastapi import HTTPException
 
 from app.models.cliente_model import Cliente
 from app.schemas.cliente_schema import ClienteCreate, ClienteUpdate
+from app.services import notificacion_service
+from app.models.notificacion_model import TipoNotificacion
 
 
 # ─────────────────────────────────────────────
@@ -37,6 +39,15 @@ def crear_cliente(db: Session, cliente: ClienteCreate) -> Cliente:
     db.add(nuevo_cliente)
     db.commit()
     db.refresh(nuevo_cliente)
+    
+    # Notificar a administradores
+    notificacion_service.notificar_a_administradores(
+        db, 
+        TipoNotificacion.CLIENTE, 
+        nuevo_cliente.id, 
+        f"Se ha registrado un nuevo cliente: {nuevo_cliente.nombre}"
+    )
+    
     return nuevo_cliente
 
 

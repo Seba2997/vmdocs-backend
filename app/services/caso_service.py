@@ -5,6 +5,8 @@ from app.models.caso_model import Caso
 from app.models.usuario import Usuario
 from app.models.caso_usuario_model import CasoUsuario
 from app.schemas.caso_schema import CasoCreate, CasoUpdate, CasoFaseUpdate
+from app.services import notificacion_service
+from app.models.notificacion_model import TipoNotificacion
 
 
 
@@ -22,6 +24,15 @@ def crear_caso(db: Session, caso: CasoCreate, creador_id: int) -> Caso:
 
         db.commit()
         db.refresh(nuevo_caso)
+        
+        # Notificar a administradores sobre el nuevo caso
+        notificacion_service.notificar_a_administradores(
+            db,
+            TipoNotificacion.CASO,
+            nuevo_caso.id,
+            f"Nuevo caso creado: {nuevo_caso.titulo}"
+        )
+        
         return nuevo_caso
     except Exception:
         db.rollback()
@@ -154,6 +165,16 @@ def asignar_usuario_a_caso(db: Session, caso_id: int, usuario_id: int) -> CasoUs
     db.add(nueva_asignacion)
     db.commit()
     db.refresh(nueva_asignacion)
+    
+    # Notificar al usuario asignado
+    notificacion_service.crear_notificacion(
+        db,
+        usuario_id,
+        TipoNotificacion.CASO,
+        caso_id,
+        f"Se te ha asignado un nuevo caso: {nueva_asignacion.caso.titulo}"
+    )
+    
     return nueva_asignacion
 
 
