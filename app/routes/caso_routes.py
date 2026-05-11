@@ -8,6 +8,8 @@ from app.schemas.caso_schema import CasoCreate, CasoUpdate, CasoFaseUpdate, Caso
 from app.schemas.usuario import UsuarioResponse
 from app.services import caso_service
 from app.utils.jwt_security import requerir_rol, obtener_usuario_actual_activo
+from app.services.actividad_service import registrar_actividad
+from app.models.actividad_model import AccionActividad
 
 router = APIRouter(prefix="/casos", tags=["Casos"])
 
@@ -33,7 +35,9 @@ def crear_caso(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
-    return caso_service.crear_caso(db, caso, creador_id=current_user.id)
+    nuevo_caso = caso_service.crear_caso(db, caso, creador_id=current_user.id)
+    registrar_actividad(db, current_user.id, AccionActividad.CREACION, "Caso", nuevo_caso.id, f"Nuevo caso aperturado: {nuevo_caso.titulo}", nuevo_caso.id)
+    return nuevo_caso
 
 
 @router.get(
@@ -140,7 +144,9 @@ def actualizar_caso(
 ):
     if current_user.rol != "ADMIN":
         caso_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
-    return caso_service.actualizar_caso(db, caso_id, data)
+    caso_actualizado = caso_service.actualizar_caso(db, caso_id, data)
+    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, "Caso", caso_id, f"Datos del caso actualizados", caso_id)
+    return caso_actualizado
 
 
 @router.patch(
@@ -161,7 +167,9 @@ def cambiar_fase_caso(
 ):
     if current_user.rol != "ADMIN":
         caso_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
-    return caso_service.cambiar_fase_caso(db, caso_id, data)
+    caso_actualizado = caso_service.cambiar_fase_caso(db, caso_id, data)
+    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, "Caso", caso_id, f"Fase cambiada a: {data.estado}", caso_id)
+    return caso_actualizado
 
 
 @router.patch(
@@ -201,7 +209,9 @@ def asignar_usuario_a_caso(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(requerir_rol("ADMIN")),
 ):
-    return caso_service.asignar_usuario_a_caso(db, caso_id, usuario_id)
+    asignacion = caso_service.asignar_usuario_a_caso(db, caso_id, usuario_id)
+    registrar_actividad(db, current_user.id, AccionActividad.ASIGNACION, "Caso", caso_id, f"Se asignó un nuevo usuario al equipo", caso_id)
+    return asignacion
 
 
 @router.delete(

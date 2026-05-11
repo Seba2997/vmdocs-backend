@@ -2,37 +2,24 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
 from app.models.cliente_model import Cliente
-from app.models.caso_model import Caso
-from app.models.caso_usuario_model import CasoUsuario
 from app.schemas.cliente_schema import ClienteCreate, ClienteUpdate
 
 
 # ─────────────────────────────────────────────
 # CONTROL DE ACCESO
 # ─────────────────────────────────────────────
+# Opción C: los clientes son un directorio compartido. Cualquier usuario
+# autenticado puede ver y editar cualquier cliente activo. La confidencialidad
+# real se mantiene a nivel de caso y documentos (RBAC estricto allí).
 
 def usuario_tiene_acceso_a_cliente(db: Session, usuario_id: int, cliente_id: int) -> bool:
-    """Verifica si un usuario tiene acceso a un cliente."""
-    resultado = (
-        db.query(CasoUsuario)
-        .join(Caso, Caso.id == CasoUsuario.caso_id)
-        .filter(
-            Caso.cliente_id == cliente_id,
-            Caso.activo == True,
-            CasoUsuario.usuario_id == usuario_id,
-        )
-        .first()
-    )
-    return resultado is not None
+    """Todo usuario autenticado tiene acceso al directorio de clientes."""
+    return True
 
 
 def verificar_acceso_a_cliente_o_403(db: Session, usuario_id: int, cliente_id: int) -> None:
-    """Lanza 403 si el usuario no tiene acceso al cliente."""
-    if not usuario_tiene_acceso_a_cliente(db, usuario_id, cliente_id):
-        raise HTTPException(
-            status_code=403,
-            detail="No tienes permiso para acceder a este cliente",
-        )
+    """Sin restricción: cualquier usuario autenticado accede al directorio de clientes."""
+    pass
 
 
 # ─────────────────────────────────────────────
@@ -59,20 +46,8 @@ def obtener_clientes_admin(db: Session) -> list[Cliente]:
 
 
 def obtener_clientes_por_usuario(db: Session, usuario_id: int) -> list[Cliente]:
-    """Retorna clientes activos con casos asignados al usuario."""
-    clientes = (
-        db.query(Cliente)
-        .join(Caso, Caso.cliente_id == Cliente.id)
-        .join(CasoUsuario, CasoUsuario.caso_id == Caso.id)
-        .filter(
-            Cliente.estado == True,
-            Caso.activo == True,
-            CasoUsuario.usuario_id == usuario_id,
-        )
-        .distinct()  # evitar duplicados si hay múltiples casos por cliente
-        .all()
-    )
-    return clientes
+    """Retorna todos los clientes activos. Opción C: directorio compartido."""
+    return db.query(Cliente).filter(Cliente.estado == True).all()
 
 
 def obtener_clientes_inactivos(db: Session) -> list[Cliente]:
