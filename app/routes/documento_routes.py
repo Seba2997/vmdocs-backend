@@ -176,9 +176,9 @@ def toggle_estado_documento(
     # ADMIN sin restriccion de propiedad; USER solo puede gestionar sus propios archivos
     usuario_solicitante_id = None if current_user.rol == "ADMIN" else current_user.id
 
-    # USER debe estar asignado al caso del documento
+    # USER debe estar asignado al caso del documento (funciona aunque esté en papelera)
     if current_user.rol != "ADMIN":
-        doc = documento_service.obtener_documento_por_id(db, documento_id)
+        doc = documento_service.obtener_documento_cualquier_estado(db, documento_id)
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, doc.caso_id)
 
     return documento_service.toggle_estado_documento(db, documento_id, usuario_solicitante_id)
@@ -209,9 +209,9 @@ def eliminar_documento_definitivamente(
     # ADMIN no tiene restriccion de propiedad; USER solo puede eliminar sus propios archivos
     usuario_solicitante_id = None if current_user.rol == "ADMIN" else current_user.id
 
-    # USER debe estar asignado al caso del documento
+    # USER debe estar asignado al caso del documento (funciona aunque esté en papelera)
     if current_user.rol != "ADMIN":
-        doc = documento_service.obtener_documento_por_id(db, documento_id)
+        doc = documento_service.obtener_documento_cualquier_estado(db, documento_id)
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, doc.caso_id)
 
     return documento_service.eliminar_definitivamente(db, documento_id, usuario_solicitante_id)

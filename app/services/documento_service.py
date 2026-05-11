@@ -368,6 +368,14 @@ def obtener_documento_por_id(db: Session, documento_id: int) -> Documento:
     return _obtener_documento_activo_o_404(db, documento_id)
 
 
+def obtener_documento_cualquier_estado(db: Session, documento_id: int) -> Documento:
+    """Retorna un documento por ID sin importar si está activo o en papelera."""
+    doc = db.query(Documento).filter(Documento.id == documento_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado.")
+    return doc
+
+
 # ─────────────────────────────────────────────
 # SIGNED URL (descarga temporal)
 # ─────────────────────────────────────────────
