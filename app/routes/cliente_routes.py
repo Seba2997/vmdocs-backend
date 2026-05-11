@@ -37,18 +37,16 @@ def crear_cliente(
     operation_id="listar_clientes",
     summary="Listar clientes activos",
     description=(
-        "Retorna clientes activos con control de acceso por rol. "
-        "ADMIN: ve todos los clientes. "
-        "USER: solo los clientes que tienen al menos un caso activo asignado al usuario."
+        "Retorna todos los clientes activos. "
+        "Cualquier usuario autenticado puede ver el directorio completo de clientes. "
+        "Los casos y documentos mantienen su control de acceso por asignación."
     ),
 )
 def listar_clientes(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
-    if current_user.rol == "ADMIN":
-        return cliente_service.obtener_clientes_admin(db)
-    return cliente_service.obtener_clientes_por_usuario(db, current_user.id)
+    return cliente_service.obtener_clientes_admin(db)
 
 
 @router.get(
@@ -72,8 +70,7 @@ def listar_clientes_inactivos(
     summary="Obtener cliente por ID",
     description=(
         "Retorna un cliente activo por ID. "
-        "ADMIN: acceso total. "
-        "USER: solo si tiene al menos un caso activo asignado para ese cliente."
+        "Cualquier usuario autenticado puede consultar cualquier cliente activo."
     ),
 )
 def obtener_cliente(
@@ -81,8 +78,6 @@ def obtener_cliente(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
-    if current_user.rol != "ADMIN":
-        cliente_service.verificar_acceso_a_cliente_o_403(db, current_user.id, cliente_id)
     return cliente_service.obtener_cliente_por_id(db, cliente_id)
 
 
@@ -93,8 +88,7 @@ def obtener_cliente(
     summary="Actualizar cliente",
     description=(
         "Actualiza los datos de un cliente existente. "
-        "ADMIN: acceso total. "
-        "USER: solo si tiene al menos un caso activo asignado para ese cliente."
+        "Cualquier usuario autenticado puede actualizar información del directorio de clientes."
     ),
 )
 def actualizar_cliente(
@@ -103,8 +97,6 @@ def actualizar_cliente(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
-    if current_user.rol != "ADMIN":
-        cliente_service.verificar_acceso_a_cliente_o_403(db, current_user.id, cliente_id)
     return cliente_service.actualizar_cliente(db, cliente_id, data)
 
 
