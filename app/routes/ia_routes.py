@@ -13,6 +13,8 @@ from app.schemas.ia_schema import (
 )
 from app.services import ia_service, documento_service
 from app.utils.jwt_security import obtener_usuario_actual_activo
+from app.services.actividad_service import registrar_actividad
+from app.models.actividad_model import AccionActividad
 
 router = APIRouter(
     prefix="/documentos",
@@ -68,6 +70,7 @@ def generar_resumen_ia(
 ):
     _verificar_acceso_documento(db, documento_id, current_user)
     doc = ia_service.generar_resumen(db, documento_id, forzar=forzar)
+    registrar_actividad(db, current_user.id, AccionActividad.ANALISIS_IA, "Documento", doc.id, f"Resumen IA generado", doc.caso_id)
     return ResumenIAResponse(
         documento_id=doc.id,
         resumen_ia=doc.resumen_ia,
@@ -105,6 +108,7 @@ def generar_ficha_ia(
     doc = ia_service.generar_ficha(db, documento_id, forzar=forzar)
 
     ficha = doc.ficha_ia or {}
+    registrar_actividad(db, current_user.id, AccionActividad.ANALISIS_IA, "Documento", doc.id, f"Ficha estructurada IA generada", doc.caso_id)
     return FichaIAResponse(
         documento_id=doc.id,
         tipo_documento=ficha.get("tipo_documento"),
@@ -140,8 +144,9 @@ def preguntar_al_documento(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
-    _verificar_acceso_documento(db, documento_id, current_user)
+    doc = _verificar_acceso_documento(db, documento_id, current_user)
     respuesta = ia_service.preguntar_documento(db, documento_id, body.pregunta)
+    registrar_actividad(db, current_user.id, AccionActividad.ANALISIS_IA, "Documento", documento_id, f"Consulta interactiva a la IA", doc.caso_id)
     return PreguntaIAResponse(
         documento_id=documento_id,
         pregunta=body.pregunta,

@@ -11,6 +11,8 @@ from app.schemas.documento_schema import (
 )
 from app.services import documento_service
 from app.utils.jwt_security import requerir_rol, obtener_usuario_actual_activo
+from app.services.actividad_service import registrar_actividad
+from app.models.actividad_model import AccionActividad
 
 router = APIRouter(prefix="/documentos", tags=["Documentos"])
 
@@ -40,12 +42,14 @@ def subir_documento(
     if current_user.rol != "ADMIN":
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
 
-    return documento_service.subir_documento(
+    doc = documento_service.subir_documento(
         db=db,
         caso_id=caso_id,
         usuario_id=current_user.id,
         archivo=archivo,
     )
+    registrar_actividad(db, current_user.id, AccionActividad.SUBIDA, "Documento", doc.id, f"Documento subido: {doc.nombre_original}", caso_id)
+    return doc
 
 
 # --------------------------------------------------
@@ -176,12 +180,13 @@ def toggle_estado_documento(
     # ADMIN sin restriccion de propiedad; USER solo puede gestionar sus propios archivos
     usuario_solicitante_id = None if current_user.rol == "ADMIN" else current_user.id
 
-    # USER debe estar asignado al caso del documento (funciona aunque esté en papelera)
+    doc = documento_service.obtener_documento_cualquier_estado(db, documento_id)
     if current_user.rol != "ADMIN":
-        doc = documento_service.obtener_documento_cualquier_estado(db, documento_id)
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, doc.caso_id)
 
-    return documento_service.toggle_estado_documento(db, documento_id, usuario_solicitante_id)
+    res = documento_service.toggle_estado_documento(db, documento_id, usuario_solicitante_id)
+    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, "Documento", documento_id, f"Documento movido a papelera/restaurado", doc.caso_id)
+    return res
 
 
 # --------------------------------------------------
@@ -209,9 +214,10 @@ def eliminar_documento_definitivamente(
     # ADMIN no tiene restriccion de propiedad; USER solo puede eliminar sus propios archivos
     usuario_solicitante_id = None if current_user.rol == "ADMIN" else current_user.id
 
-    # USER debe estar asignado al caso del documento (funciona aunque esté en papelera)
+    doc = documento_service.obtener_documento_cualquier_estado(db, documento_id)
     if current_user.rol != "ADMIN":
-        doc = documento_service.obtener_documento_cualquier_estado(db, documento_id)
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, doc.caso_id)
 
-    return documento_service.eliminar_definitivamente(db, documento_id, usuario_solicitante_id)
+    res = documento_service.eliminar_definitivamente(db, documento_id, usuario_solicitante_id)
+    registrar_actividad(db, current_user.id, AccionActividad.ELIMINACION, "Documento", documento_id, f"Documento eliminado definitivamente", doc.caso_id)
+    return res
