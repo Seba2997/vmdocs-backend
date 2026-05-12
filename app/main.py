@@ -3,9 +3,9 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base, SessionLocal
 from app.models.usuario import Usuario, RolUsuario
-from app.models import actividad_model
+from app.models import actividad_model, notificacion_model
 from app.utils.security import hash_password
-from app.routes import usuarios, auth, cliente_routes, caso_routes, documento_routes, ia_routes, actividad_routes, password_reset_routes, dashboard_routes
+from app.routes import usuarios, auth, cliente_routes, caso_routes, documento_routes, ia_routes, actividad_routes, password_reset_routes, dashboard_routes, notificacion_routes
 
 app = FastAPI()
 
@@ -56,6 +56,7 @@ app.include_router(ia_routes.router)
 app.include_router(actividad_routes.router)
 app.include_router(password_reset_routes.router)
 app.include_router(dashboard_routes.router)
+app.include_router(notificacion_routes.router)
 
 
 @app.get("/", include_in_schema=False)
