@@ -1,10 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import engine, Base, SessionLocal
-from app.models.usuario import Usuario, RolUsuario
-from app.models import actividad_model, notificacion_model
-from app.utils.security import hash_password
+from app.database import engine, Base
 from app.routes import usuarios, auth, cliente_routes, caso_routes, documento_routes, ia_routes, actividad_routes, password_reset_routes, dashboard_routes, notificacion_routes
 
 app = FastAPI()
@@ -26,26 +23,7 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
-# Admin temporal para pruebas
-@app.on_event("startup")
-def create_admin_user():
-    db = SessionLocal()
-    try:
-        admin_email = "admin@email.com"
-        admin_user = db.query(Usuario).filter(Usuario.email == admin_email).first()
-        if not admin_user:
-            nuevo_admin = Usuario(
-                nombre="Admin",
-                apellido="Maestro",
-                email=admin_email,
-                password=hash_password("Admin123*"),
-                rol=RolUsuario.ADMIN,
-                estado=True
-            )
-            db.add(nuevo_admin)
-            db.commit()
-    finally:
-        db.close()
+
 
 app.include_router(usuarios.router)
 app.include_router(auth.router)

@@ -9,8 +9,8 @@ class CasoUsuario(Base):
     __tablename__ = "caso_usuario"
 
     id = Column(Integer, primary_key=True, index=True)
-    caso_id = Column(Integer, ForeignKey("casos.id"), nullable=False)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    caso_id = Column(Integer, ForeignKey("casos.id"), index=True, nullable=False)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), index=True, nullable=False)
     fecha_asignacion = Column(DateTime(timezone=True), server_default=func.now())
 
     # Un usuario solo puede asignarse una vez al caso

@@ -8,7 +8,7 @@ from app.schemas.cliente_schema import ClienteCreate, ClienteUpdate, ClienteResp
 from app.services import cliente_service
 from app.utils.jwt_security import requerir_rol, obtener_usuario_actual_activo
 from app.services.actividad_service import registrar_actividad
-from app.models.actividad_model import AccionActividad
+from app.models.actividad_model import AccionActividad, EntidadActividad
 
 router = APIRouter(prefix="/clientes", tags=["Clientes"])
 
@@ -30,8 +30,8 @@ def crear_cliente(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
-    nuevo_cliente = cliente_service.crear_cliente(db, cliente)
-    registrar_actividad(db, current_user.id, AccionActividad.CREACION, "Cliente", nuevo_cliente.id, f"Nuevo cliente registrado: {nuevo_cliente.nombre}", None)
+    nuevo_cliente = cliente_service.crear_cliente(db, cliente, current_user.id)
+    registrar_actividad(db, current_user.id, AccionActividad.CREACION, EntidadActividad.CLIENTE, nuevo_cliente.id, f"Nuevo cliente registrado: {nuevo_cliente.nombre}", None)
     return nuevo_cliente
 
 
@@ -101,8 +101,8 @@ def actualizar_cliente(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
-    cliente_actualizado = cliente_service.actualizar_cliente(db, cliente_id, data)
-    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, "Cliente", cliente_id, f"Datos de cliente actualizados", None)
+    cliente_actualizado = cliente_service.actualizar_cliente(db, cliente_id, data, current_user.id)
+    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, EntidadActividad.CLIENTE, cliente_id, f"Datos de cliente actualizados", None)
     return cliente_actualizado
 
 
@@ -122,5 +122,5 @@ def toggle_estado_cliente(
     current_user: Usuario = Depends(requerir_rol("ADMIN")),
 ):
     res = cliente_service.toggle_estado_cliente(db, cliente_id)
-    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, "Cliente", cliente_id, f"Cliente activado/desactivado", None)
+    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, EntidadActividad.CLIENTE, cliente_id, f"Cliente activado/desactivado", None)
     return res

@@ -90,11 +90,15 @@ def get_dashboard_stats(
         # Mapeo de estilos y enlaces según tipo de acción
         icon, bg, color, enlace = "info", "bg-gray-50", "text-gray-700", "/dashboard"
         
+        # Obtener el valor del Enum en formato legible
+        ent_val = act.entidad_tipo.value if hasattr(act.entidad_tipo, "value") else str(act.entidad_tipo).split('.')[-1]
+        ent_show = ent_val.capitalize()
+        
         if act.accion.value == "CREACION":
-            if act.entidad_tipo == "Caso":
+            if ent_val == "CASO":
                 icon, bg, color = "gavel", "bg-orange-50", "text-orange-700"
                 enlace = f"/casos/{act.entidad_id}"
-            elif act.entidad_tipo == "Cliente":
+            elif ent_val == "CLIENTE":
                 icon, bg, color = "person_add", "bg-sky-50", "text-sky-700"
                 enlace = "/clientes"
         elif act.accion.value == "SUBIDA":
@@ -121,7 +125,7 @@ def get_dashboard_stats(
             "iconBg": bg,
             "iconColor": color,
             "titulo": act.descripcion,
-            "desc": f"{act.entidad_tipo} #{act.entidad_id}",
+            "desc": f"{ent_show} #{act.entidad_id}",
             "tiempo": fecha_str,
             "enlace": enlace,
             "usuario": usuario_nombre if es_admin else None

@@ -12,7 +12,7 @@ class Notificacion(Base):
     __tablename__ = "notificaciones"
 
     id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), index=True, nullable=False)
     tipo = Column(SQLEnum(TipoNotificacion), nullable=False)
     referencia_id = Column(Integer, nullable=False)
     mensaje = Column(String(500), nullable=False)
