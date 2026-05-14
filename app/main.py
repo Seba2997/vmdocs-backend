@@ -11,6 +11,7 @@ ORIGINES_PERMITIDOS = [
     "http://localhost:5173",  # Vite dev server
     "http://localhost:8000",  # Swagger local
     "http://127.0.0.1:8000",  # Swagger local alternativo
+    "https://vmdocs-frontend.vercel.app", # Despliegue en vercel
 ]
 
 app.add_middleware(
