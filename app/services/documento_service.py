@@ -1,7 +1,11 @@
 import uuid
 import io
 import csv
-from openpyxl import Workbook
+import logging
+
+from openpyxl import Workbook, load_workbook
+import PyPDF2
+import docx as python_docx
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -11,6 +15,8 @@ from app.config import SUPABASE_URL, SUPABASE_KEY, SUPABASE_BUCKET, TAMANO_MAXIM
 from app.models.documento_model import Documento
 from app.models.caso_model import Caso
 from app.models.caso_usuario_model import CasoUsuario
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────
@@ -107,6 +113,123 @@ def verificar_acceso_a_caso_o_403(db: Session, usuario_id: int, caso_id: int) ->
 
 
 # ─────────────────────────────────────────────
+# EXTRACCIÓN DE TEXTO (para IA)
+# ─────────────────────────────────────────────
+
+def _extraer_texto_pdf(contenido: bytes) -> str | None:
+    """
+    Extrae texto plano de un PDF con texto embebido usando PyPDF2.
+    Retorna None si el PDF es una imagen escaneada o si ocurre cualquier error.
+    """
+    try:
+        reader = PyPDF2.PdfReader(io.BytesIO(contenido))
+        partes = [
+            page.extract_text()
+            for page in reader.pages
+            if page.extract_text()
+        ]
+        texto_completo = "\n".join(partes).strip()
+        return texto_completo[:20000] if texto_completo else None
+    except Exception as exc:
+        logger.warning("No se pudo extraer texto del PDF: %s", exc)
+        return None
+
+
+def _extraer_texto_xlsx(contenido: bytes) -> str | None:
+    """
+    Extrae texto plano de un XLSX (y de los CSV convertidos a XLSX)
+    leyendo celda por celda con openpyxl.
+    Solo considera hojas activas; celdas vacías se omiten.
+    """
+    try:
+        wb = load_workbook(io.BytesIO(contenido), read_only=True, data_only=True)
+        filas_texto = []
+        for sheet in wb.worksheets:
+            for fila in sheet.iter_rows(values_only=True):
+                celda_str = "\t".join(
+                    str(celda) for celda in fila if celda is not None
+                )
+                if celda_str.strip():
+                    filas_texto.append(celda_str)
+        wb.close()
+        texto_completo = "\n".join(filas_texto).strip()
+        return texto_completo[:20000] if texto_completo else None
+    except Exception as exc:
+        logger.warning("No se pudo extraer texto del XLSX: %s", exc)
+        return None
+
+
+def _extraer_texto_docx(contenido: bytes) -> str | None:
+    """
+    Extrae texto plano de un archivo DOCX usando python-docx.
+    Recorre párrafos y tablas para cubrir el contenido completo del documento.
+    """
+    try:
+        doc = python_docx.Document(io.BytesIO(contenido))
+        partes = []
+
+        # Párrafos normales
+        for parrafo in doc.paragraphs:
+            if parrafo.text.strip():
+                partes.append(parrafo.text.strip())
+
+        # Texto dentro de tablas
+        for tabla in doc.tables:
+            for fila in tabla.rows:
+                fila_texto = "\t".join(
+                    celda.text.strip() for celda in fila.cells if celda.text.strip()
+                )
+                if fila_texto:
+                    partes.append(fila_texto)
+
+        texto_completo = "\n".join(partes).strip()
+        return texto_completo[:20000] if texto_completo else None
+    except Exception as exc:
+        logger.warning("No se pudo extraer texto del DOCX: %s", exc)
+        return None
+
+
+def _extraer_texto_doc(contenido: bytes) -> str | None:
+    """
+    Extracción de texto de mejor esfuerzo para archivos DOC (formato Word 97-2003).
+    El formato DOC es un binario OLE complejo; sin librerías externas como LibreOffice
+    solo se puede recuperar texto visible de forma aproximada.
+    Retorna None si no se encuentra texto legible.
+    """
+    try:
+        # Decodificar bytes intentando latin-1 (cubre la mayoría de carácteres del formato OLE)
+        raw = contenido.decode("latin-1", errors="ignore")
+        # Filtrar solo caracteres imprimibles (letras, números, puntuación, espacios)
+        texto = "".join(
+            ch for ch in raw
+            if ch.isprintable() or ch in ("\n", "\t", "\r")
+        )
+        # Eliminar líneas muy cortas (generalmente son artefactos binarios)
+        lineas = [l.strip() for l in texto.splitlines() if len(l.strip()) > 3]
+        texto_limpio = "\n".join(lineas).strip()
+        return texto_limpio[:20000] if len(texto_limpio) > 50 else None
+    except Exception as exc:
+        logger.warning("No se pudo extraer texto del DOC: %s", exc)
+        return None
+
+
+def _extraer_texto(contenido: bytes, extension: str) -> str | None:
+    """
+    Dispatcher: selecciona la función de extracción correcta según la extensión.
+    Retorna None para tipos sin soporte (imágenes, etc.).
+    """
+    if extension == "pdf":
+        return _extraer_texto_pdf(contenido)
+    if extension == "xlsx":
+        return _extraer_texto_xlsx(contenido)
+    if extension == "docx":
+        return _extraer_texto_docx(contenido)
+    if extension == "doc":
+        return _extraer_texto_doc(contenido)
+    return None  # png, jpg, jpeg → sin extracción
+
+
+# ─────────────────────────────────────────────
 # SUBIDA
 # ─────────────────────────────────────────────
 
@@ -116,13 +239,7 @@ def subir_documento(
     usuario_id: int,
     archivo: UploadFile,
 ) -> Documento:
-    """
-    Valida el archivo, lo sube a Supabase Storage y persiste la metadata
-    en PostgreSQL dentro de una sola operación cohesiva.
-    Al ser una función síncrona (def en vez de async def), FastAPI la ejecuta
-    en un thread pool, evitando bloquear el event loop principal durante la
-    subida a Supabase.
-    """
+    """Sube archivo a Supabase y guarda metadata."""
     # 1. Validar que el caso existe y está activo
     _obtener_caso_activo_o_404(db, caso_id)
 
@@ -175,6 +292,11 @@ def subir_documento(
 
     nombre_storage = f"casos/{caso_id}/{uuid.uuid4()}.{extension}"
 
+    # 4b. Extraer texto para análisis IA según el tipo de archivo
+    # PDF, XLSX (incl. CSV convertidos), DOCX, DOC → se extrae texto.
+    # Imágenes → texto_extraido queda en None (la IA devolverá 422 si se intenta).
+    texto_extraido: str | None = _extraer_texto(contenido, extension)
+
     # 5. Subir a Supabase Storage
     supabase = _get_supabase()
     try:
@@ -193,10 +315,11 @@ def subir_documento(
     nuevo_doc = Documento(
         nombre_original=nombre_original,
         nombre_storage=nombre_storage,
-        tipo_mime=archivo.content_type,
+        tipo_mime=content_type,          # usar content_type local (ya actualizado si fue CSV→XLSX)
         tamano=tamano,
         caso_id=caso_id,
         usuario_id=usuario_id,
+        texto_extraido=texto_extraido,  # puede ser None si el PDF no tiene texto
     )
     try:
         db.add(nuevo_doc)
@@ -245,6 +368,14 @@ def obtener_documento_por_id(db: Session, documento_id: int) -> Documento:
     return _obtener_documento_activo_o_404(db, documento_id)
 
 
+def obtener_documento_cualquier_estado(db: Session, documento_id: int) -> Documento:
+    """Retorna un documento por ID sin importar si está activo o en papelera."""
+    doc = db.query(Documento).filter(Documento.id == documento_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado.")
+    return doc
+
+
 # ─────────────────────────────────────────────
 # SIGNED URL (descarga temporal)
 # ─────────────────────────────────────────────
@@ -289,15 +420,7 @@ def toggle_estado_documento(
     documento_id: int,
     usuario_solicitante_id: int | None = None,
 ) -> dict:
-    """
-    Cambia el campo 'activo' del documento de forma alternada (toggle).
-    Envía el documento a la papelera del caso (activo=False) o lo restaura (activo=True).
-
-    Permisos:
-      - ADMIN (usuario_solicitante_id=None): puede hacer toggle de cualquier documento.
-      - USER  (usuario_solicitante_id=<id>): solo puede hacer toggle de documentos
-        que él mismo haya subido (doc.usuario_id == usuario_solicitante_id).
-    """
+    """Activa o desactiva un documento (papelera)."""
     doc = db.query(Documento).filter(Documento.id == documento_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado.")
@@ -326,22 +449,7 @@ def eliminar_definitivamente(
     documento_id: int,
     usuario_solicitante_id: int | None = None,
 ) -> dict:
-    """
-    Elimina de forma irreversible un documento que ya esté en la papelera
-    (activo=False). Borra el archivo del bucket de Supabase y luego el
-    registro de PostgreSQL.
-
-    Permisos:
-      - ADMIN (usuario_solicitante_id=None): puede eliminar cualquier documento.
-      - USER  (usuario_solicitante_id=<id>): solo puede eliminar documentos
-        que él mismo haya subido (doc.usuario_id == usuario_solicitante_id).
-
-    Pasos:
-      1. Verificar que el documento existe y está inactivo (en papelera).
-      2. Si es USER, verificar que es el propietario del documento.
-      3. Eliminar el archivo del bucket de Supabase.
-      4. Eliminar el registro de la base de datos.
-    """
+    """Elimina permanentemente un documento de storage y BD."""
     # 1. Verificar existencia e inactividad
     doc = db.query(Documento).filter(Documento.id == documento_id).first()
     if not doc:

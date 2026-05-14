@@ -5,17 +5,16 @@ from app.models.caso_model import Caso
 from app.models.usuario import Usuario
 from app.models.caso_usuario_model import CasoUsuario
 from app.schemas.caso_schema import CasoCreate, CasoUpdate, CasoFaseUpdate
+from app.services import notificacion_service
+from app.models.notificacion_model import TipoNotificacion
 
 
 
 
 def crear_caso(db: Session, caso: CasoCreate, creador_id: int) -> Caso:
-    """
-    Crea un nuevo caso y auto-asigna al usuario creador en la misma transacción.
-    Si cualquiera de las dos operaciones falla, se hace rollback de ambas.
-    """
+    """Crea un nuevo caso y auto-asigna al usuario creador."""
     try:
-        nuevo_caso = Caso(**caso.model_dump())
+        nuevo_caso = Caso(**caso.model_dump(), created_by=creador_id)
         db.add(nuevo_caso)
         db.flush()  # Obtiene el ID generado sin hacer commit todavía
 
@@ -25,6 +24,15 @@ def crear_caso(db: Session, caso: CasoCreate, creador_id: int) -> Caso:
 
         db.commit()
         db.refresh(nuevo_caso)
+        
+        # Notificar a administradores sobre el nuevo caso
+        notificacion_service.notificar_a_administradores(
+            db,
+            TipoNotificacion.CASO,
+            nuevo_caso.id,
+            f"Nuevo caso creado: {nuevo_caso.titulo}"
+        )
+        
         return nuevo_caso
     except Exception:
         db.rollback()
@@ -49,13 +57,15 @@ def obtener_caso_por_id(db: Session, caso_id: int):
     return caso
 
 
-def actualizar_caso(db: Session, caso_id: int, data: CasoUpdate):
+def actualizar_caso(db: Session, caso_id: int, data: CasoUpdate, usuario_id: int):
     caso = db.query(Caso).filter(Caso.id == caso_id, Caso.activo == True).first()
     if not caso:
         raise HTTPException(status_code=404, detail="Caso no encontrado")
 
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(caso, key, value)
+        
+    caso.updated_by = usuario_id
 
     db.commit()
     db.refresh(caso)
@@ -76,10 +86,7 @@ def toggle_estado_caso(db: Session, caso_id: int):
 
 
 def cambiar_fase_caso(db: Session, caso_id: int, data: CasoFaseUpdate) -> Caso:
-    """
-    Cambia la fase (estado) de un caso activo.
-    Solo actualiza el campo 'estado' (FaseCaso), sin tocar otros campos.
-    """
+    """Cambia la fase de un caso activo."""
     caso = db.query(Caso).filter(Caso.id == caso_id, Caso.activo == True).first()
     if not caso:
         raise HTTPException(status_code=404, detail="Caso no encontrado o inactivo")
@@ -140,12 +147,7 @@ def verificar_acceso_a_caso_o_403(db: Session, usuario_id: int, caso_id: int) ->
 
 
 def asignar_usuario_a_caso(db: Session, caso_id: int, usuario_id: int) -> CasoUsuario:
-    """
-    Asigna un usuario a un caso con validaciones completas:
-    - El caso debe existir y estar activo.
-    - El usuario debe existir y estar activo.
-    - No se permite duplicar una asignación existente.
-    """
+    """Asigna un usuario a un caso validando existencia y duplicidad."""
     # 1. Validar que el caso existe y está activo
     _obtener_caso_activo_o_404(db, caso_id)
 
@@ -165,15 +167,21 @@ def asignar_usuario_a_caso(db: Session, caso_id: int, usuario_id: int) -> CasoUs
     db.add(nueva_asignacion)
     db.commit()
     db.refresh(nueva_asignacion)
+    
+    # Notificar al usuario asignado
+    notificacion_service.crear_notificacion(
+        db,
+        usuario_id,
+        TipoNotificacion.CASO,
+        caso_id,
+        f"Se te ha asignado un nuevo caso: {nueva_asignacion.caso.titulo}"
+    )
+    
     return nueva_asignacion
 
 
 def desasignar_usuario_de_caso(db: Session, caso_id: int, usuario_id: int) -> dict:
-    """
-    Elimina la asignación entre un usuario y un caso.
-    - El caso debe existir (activo o no, para permitir limpiar asignaciones).
-    - La asignación debe existir para poder eliminarla.
-    """
+    """Elimina la asignación entre un usuario y un caso."""
     # 1. Validar que el caso existe (sin filtrar por activo para poder limpiar)
     caso = db.query(Caso).filter(Caso.id == caso_id).first()
     if not caso:
@@ -243,16 +251,7 @@ def obtener_casos_de_usuario(db: Session, usuario_id: int) -> list[Caso]:
 # ─────────────────────────────────────────────
 
 def obtener_casos(db: Session, usuario_id: int | None = None, es_admin: bool = False) -> list[Caso]:
-    """
-    Retorna casos activos con control de acceso por rol:
-    - ADMIN (es_admin=True): retorna todos los casos activos.
-    - USER (es_admin=False): retorna solo los casos activos donde esté asignado.
-
-    Parámetros:
-        db: Sesión de base de datos.
-        usuario_id: ID del usuario que hace la consulta (requerido si no es admin).
-        es_admin: True si el usuario tiene rol ADMIN.
-    """
+    """Retorna casos activos filtrados por rol y asignaciones."""
     query = db.query(Caso).filter(Caso.activo == True)
 
     if es_admin:
