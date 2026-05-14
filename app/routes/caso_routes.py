@@ -9,7 +9,10 @@ from app.schemas.usuario import UsuarioResponse
 from app.services import caso_service
 from app.utils.jwt_security import requerir_rol, obtener_usuario_actual_activo
 from app.services.actividad_service import registrar_actividad
-from app.models.actividad_model import AccionActividad
+from app.models.actividad_model import AccionActividad, EntidadActividad
+
+from app.schemas.nota_caso_schema import NotaCasoCreate, NotaCasoUpdate, NotaCasoResponse
+from app.services import nota_caso_service
 
 router = APIRouter(prefix="/casos", tags=["Casos"])
 
@@ -36,7 +39,7 @@ def crear_caso(
     current_user: Usuario = Depends(obtener_usuario_actual_activo),
 ):
     nuevo_caso = caso_service.crear_caso(db, caso, creador_id=current_user.id)
-    registrar_actividad(db, current_user.id, AccionActividad.CREACION, "Caso", nuevo_caso.id, f"Nuevo caso aperturado: {nuevo_caso.titulo}", nuevo_caso.id)
+    registrar_actividad(db, current_user.id, AccionActividad.CREACION, EntidadActividad.CASO, nuevo_caso.id, f"Nuevo caso aperturado: {nuevo_caso.titulo}", nuevo_caso.id)
     return nuevo_caso
 
 
@@ -144,8 +147,8 @@ def actualizar_caso(
 ):
     if current_user.rol != "ADMIN":
         caso_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
-    caso_actualizado = caso_service.actualizar_caso(db, caso_id, data)
-    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, "Caso", caso_id, f"Datos del caso actualizados", caso_id)
+    caso_actualizado = caso_service.actualizar_caso(db, caso_id, data, current_user.id)
+    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, EntidadActividad.CASO, caso_id, f"Datos del caso actualizados", caso_id)
     return caso_actualizado
 
 
@@ -168,7 +171,7 @@ def cambiar_fase_caso(
     if current_user.rol != "ADMIN":
         caso_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
     caso_actualizado = caso_service.cambiar_fase_caso(db, caso_id, data)
-    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, "Caso", caso_id, f"Fase cambiada a: {data.estado}", caso_id)
+    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, EntidadActividad.CASO, caso_id, f"Fase cambiada a: {data.estado}", caso_id)
     return caso_actualizado
 
 
@@ -210,7 +213,7 @@ def asignar_usuario_a_caso(
     current_user: Usuario = Depends(requerir_rol("ADMIN")),
 ):
     asignacion = caso_service.asignar_usuario_a_caso(db, caso_id, usuario_id)
-    registrar_actividad(db, current_user.id, AccionActividad.ASIGNACION, "Caso", caso_id, f"Se asignó un nuevo usuario al equipo", caso_id)
+    registrar_actividad(db, current_user.id, AccionActividad.ASIGNACION, EntidadActividad.CASO, caso_id, f"Se asignó un nuevo usuario al equipo", caso_id)
     return asignacion
 
 
@@ -250,3 +253,70 @@ def listar_usuarios_de_caso(
         caso_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
 
     return caso_service.obtener_usuarios_de_caso(db, caso_id)
+
+
+# ─────────────────────────────────────────────
+# ENDPOINTS DE NOTAS (Bitácora de Caso)
+# ─────────────────────────────────────────────
+
+@router.get(
+    "/{caso_id}/notas",
+    response_model=List[NotaCasoResponse],
+    summary="Listar notas de un caso",
+    tags=["Notas"],
+)
+def listar_notas_caso(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(obtener_usuario_actual_activo),
+):
+    if current_user.rol != "ADMIN":
+        caso_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
+    return nota_caso_service.listar_notas_por_caso(db, caso_id)
+
+@router.post(
+    "/{caso_id}/notas",
+    response_model=NotaCasoResponse,
+    summary="Crear nota en un caso",
+    tags=["Notas"],
+)
+def crear_nota_caso(
+    caso_id: int,
+    nota: NotaCasoCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(obtener_usuario_actual_activo),
+):
+    if current_user.rol != "ADMIN":
+        caso_service.verificar_acceso_a_caso_o_403(db, current_user.id, caso_id)
+    
+    nueva_nota = nota_caso_service.crear_nota(db, caso_id, current_user.id, nota)
+    registrar_actividad(db, current_user.id, AccionActividad.CREACION, EntidadActividad.CASO, caso_id, "Nueva nota agregada a la bitácora", caso_id)
+    return nueva_nota
+
+@router.put(
+    "/notas/{nota_id}",
+    response_model=NotaCasoResponse,
+    summary="Actualizar nota",
+    tags=["Notas"],
+)
+def actualizar_nota_caso(
+    nota_id: int,
+    nota: NotaCasoUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(obtener_usuario_actual_activo),
+):
+    es_admin = current_user.rol == "ADMIN"
+    return nota_caso_service.actualizar_nota(db, nota_id, current_user.id, es_admin, nota)
+
+@router.delete(
+    "/notas/{nota_id}",
+    summary="Eliminar nota",
+    tags=["Notas"],
+)
+def eliminar_nota_caso(
+    nota_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(obtener_usuario_actual_activo),
+):
+    es_admin = current_user.rol == "ADMIN"
+    return nota_caso_service.eliminar_nota(db, nota_id, current_user.id, es_admin)

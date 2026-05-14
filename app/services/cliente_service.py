@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from fastapi import HTTPException
 
 from app.models.cliente_model import Cliente
@@ -28,14 +29,38 @@ def verificar_acceso_a_cliente_o_403(db: Session, usuario_id: int, cliente_id: i
 # CRUD
 # ─────────────────────────────────────────────
 
-def crear_cliente(db: Session, cliente: ClienteCreate) -> Cliente:
-    # Validar email único (si viene)
+def crear_cliente(db: Session, cliente: ClienteCreate, creador_id: int) -> Cliente:
+    # Validar si existe por RUT o Email
+    condiciones = [Cliente.rut == cliente.rut]
     if cliente.email:
-        existente = db.query(Cliente).filter(Cliente.email == cliente.email).first()
-        if existente:
-            raise HTTPException(status_code=400, detail="El email ya está registrado")
+        condiciones.append(Cliente.email == cliente.email)
 
-    nuevo_cliente = Cliente(**cliente.model_dump())
+    existente = db.query(Cliente).filter(or_(*condiciones)).first()
+
+    if existente:
+        if existente.estado:
+            # Está activo, no podemos duplicarlo
+            conflict_field = "RUT" if existente.rut == cliente.rut else "email"
+            raise HTTPException(status_code=400, detail=f"Ya existe un cliente activo con este {conflict_field}")
+        else:
+            # Está inactivo (papelera). REACTIVACIÓN MÁGICA.
+            for key, value in cliente.model_dump().items():
+                setattr(existente, key, value)
+            existente.estado = True
+            existente.updated_by = creador_id
+            
+            db.commit()
+            db.refresh(existente)
+            
+            notificacion_service.notificar_a_administradores(
+                db, 
+                TipoNotificacion.CLIENTE, 
+                existente.id, 
+                f"Se ha reactivado y actualizado un cliente desde la papelera: {existente.nombre}"
+            )
+            return existente
+
+    nuevo_cliente = Cliente(**cliente.model_dump(), created_by=creador_id)
     db.add(nuevo_cliente)
     db.commit()
     db.refresh(nuevo_cliente)
@@ -76,7 +101,7 @@ def obtener_cliente_por_id(db: Session, cliente_id: int) -> Cliente:
     return cliente
 
 
-def actualizar_cliente(db: Session, cliente_id: int, data: ClienteUpdate) -> Cliente:
+def actualizar_cliente(db: Session, cliente_id: int, data: ClienteUpdate, usuario_id: int) -> Cliente:
     cliente = db.query(Cliente).filter(
         Cliente.id == cliente_id,
         Cliente.estado == True,
@@ -92,6 +117,8 @@ def actualizar_cliente(db: Session, cliente_id: int, data: ClienteUpdate) -> Cli
 
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(cliente, key, value)
+        
+    cliente.updated_by = usuario_id
 
     db.commit()
     db.refresh(cliente)

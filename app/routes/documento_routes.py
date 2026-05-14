@@ -12,7 +12,7 @@ from app.schemas.documento_schema import (
 from app.services import documento_service
 from app.utils.jwt_security import requerir_rol, obtener_usuario_actual_activo
 from app.services.actividad_service import registrar_actividad
-from app.models.actividad_model import AccionActividad
+from app.models.actividad_model import AccionActividad, EntidadActividad
 
 router = APIRouter(prefix="/documentos", tags=["Documentos"])
 
@@ -48,7 +48,7 @@ def subir_documento(
         usuario_id=current_user.id,
         archivo=archivo,
     )
-    registrar_actividad(db, current_user.id, AccionActividad.SUBIDA, "Documento", doc.id, f"Documento subido: {doc.nombre_original}", caso_id)
+    registrar_actividad(db, current_user.id, AccionActividad.SUBIDA, EntidadActividad.DOCUMENTO, doc.id, f"Documento subido: {doc.nombre_original}", caso_id)
     return doc
 
 
@@ -185,7 +185,7 @@ def toggle_estado_documento(
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, doc.caso_id)
 
     res = documento_service.toggle_estado_documento(db, documento_id, usuario_solicitante_id)
-    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, "Documento", documento_id, f"Documento movido a papelera/restaurado", doc.caso_id)
+    registrar_actividad(db, current_user.id, AccionActividad.ACTUALIZACION, EntidadActividad.DOCUMENTO, documento_id, f"Documento movido a papelera/restaurado", doc.caso_id)
     return res
 
 
@@ -219,5 +219,5 @@ def eliminar_documento_definitivamente(
         documento_service.verificar_acceso_a_caso_o_403(db, current_user.id, doc.caso_id)
 
     res = documento_service.eliminar_definitivamente(db, documento_id, usuario_solicitante_id)
-    registrar_actividad(db, current_user.id, AccionActividad.ELIMINACION, "Documento", documento_id, f"Documento eliminado definitivamente", doc.caso_id)
+    registrar_actividad(db, current_user.id, AccionActividad.ELIMINACION, EntidadActividad.DOCUMENTO, documento_id, f"Documento eliminado definitivamente", doc.caso_id)
     return res

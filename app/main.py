@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base, SessionLocal
 from app.models.usuario import Usuario, RolUsuario
-from app.models import actividad_model, notificacion_model
+from app.models import actividad_model, notificacion_model, nota_caso_model
 from app.utils.security import hash_password
 from app.routes import usuarios, auth, cliente_routes, caso_routes, documento_routes, ia_routes, actividad_routes, password_reset_routes, dashboard_routes, notificacion_routes
 

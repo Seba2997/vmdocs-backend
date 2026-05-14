@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
-from app.models.actividad_model import AccionActividad
+from app.models.actividad_model import AccionActividad, EntidadActividad
 
 class UsuarioInfo(BaseModel):
     id: int
@@ -16,7 +16,7 @@ class ActividadResponse(BaseModel):
     id: int
     usuario_id: Optional[int]
     accion: AccionActividad
-    entidad_tipo: str
+    entidad_tipo: EntidadActividad
     entidad_id: int
     caso_id: Optional[int]
     descripcion: str
