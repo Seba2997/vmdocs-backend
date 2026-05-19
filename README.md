@@ -1,5 +1,10 @@
 # VMDocs Backend
 
+> [!IMPORTANT]
+> **Nota para Profesores y Revisores:**
+> Existe una rama configurada específicamente para probar y evaluar este proyecto de forma 100% local mediante Docker (sin requerir credenciales externas, con BD local e IA simulada).
+> Por favor, **cambia a la rama `testing`** y sigue las instrucciones detalladas en el `README.md` del backend de dicha rama.
+
 API REST para la plataforma VMDocs, un sistema de gestion documental orientado a estudios juridicos. Permite administrar clientes, casos, documentos, usuarios y actividades, con soporte para asistencia por IA.
 
 ## Tecnologias
