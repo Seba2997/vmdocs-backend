@@ -2,6 +2,8 @@ import uuid
 import io
 import csv
 import logging
+import os
+import shutil
 
 from openpyxl import Workbook, load_workbook
 import PyPDF2
@@ -12,6 +14,10 @@ from sqlalchemy.orm import Session
 from supabase import create_client, Client
 
 from app.config import SUPABASE_URL, SUPABASE_KEY, SUPABASE_BUCKET, TAMANO_MAXIMO_BYTES, TIPOS_MIME_PERMITIDOS
+
+# Configuracion del backend de almacenamiento
+_STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "supabase")  # "local" | "supabase"
+_UPLOAD_DIR      = os.getenv("UPLOAD_DIR", "/uploads")
 from app.models.documento_model import Documento
 from app.models.caso_model import Caso
 from app.models.caso_usuario_model import CasoUsuario
@@ -297,19 +303,25 @@ def subir_documento(
     # Imágenes → texto_extraido queda en None (la IA devolverá 422 si se intenta).
     texto_extraido: str | None = _extraer_texto(contenido, extension)
 
-    # 5. Subir a Supabase Storage
-    supabase = _get_supabase()
-    try:
-        supabase.storage.from_(SUPABASE_BUCKET).upload(
-            path=nombre_storage,
-            file=contenido,
-            file_options={"content-type": content_type},
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Error al subir el archivo al almacenamiento: {exc}"
-        )
+    # 5. Subir al backend de almacenamiento configurado
+    if _STORAGE_BACKEND == "local":
+        ruta_fisica = os.path.join(_UPLOAD_DIR, nombre_storage)
+        os.makedirs(os.path.dirname(ruta_fisica), exist_ok=True)
+        with open(ruta_fisica, "wb") as f:
+            f.write(contenido)
+    else:
+        supabase = _get_supabase()
+        try:
+            supabase.storage.from_(SUPABASE_BUCKET).upload(
+                path=nombre_storage,
+                file=contenido,
+                file_options={"content-type": content_type},
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Error al subir el archivo al almacenamiento: {exc}"
+            )
 
     # 6. Persistir metadata en PostgreSQL
     nuevo_doc = Documento(
@@ -385,12 +397,17 @@ SIGNED_URL_EXPIRACION = 300  # segundos (5 minutos)
 
 def generar_signed_url(db: Session, documento_id: int, modo: str = "descargar") -> dict:
     """
-    Genera una URL temporal de Supabase para descargar o ver el documento.
-    NO usa URLs públicas permanentes.
+    Genera una URL para descargar o ver el documento.
+    En modo local devuelve una URL directa al servidor.
+    En produccion genera una URL firmada temporal de Supabase.
     """
     doc = _obtener_documento_activo_o_404(db, documento_id)
-    supabase = _get_supabase()
 
+    if _STORAGE_BACKEND == "local":
+        url = f"http://localhost:8000/uploads/{doc.nombre_storage}"
+        return {"signed_url": url, "expira_en": 0}
+
+    supabase = _get_supabase()
     opciones = {"download": doc.nombre_original} if modo == "descargar" else {}
 
     try:
@@ -469,15 +486,26 @@ def eliminar_definitivamente(
 
     nombre_storage = doc.nombre_storage
 
-    # 3. Eliminar del bucket de Supabase
-    supabase = _get_supabase()
-    try:
-        supabase.storage.from_(SUPABASE_BUCKET).remove([nombre_storage])
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Error al eliminar el archivo del almacenamiento: {exc}",
-        )
+    # 3. Eliminar del backend de almacenamiento configurado
+    if _STORAGE_BACKEND == "local":
+        ruta_fisica = os.path.join(_UPLOAD_DIR, nombre_storage)
+        try:
+            if os.path.exists(ruta_fisica):
+                os.remove(ruta_fisica)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Error al eliminar el archivo del disco: {exc}"
+            )
+    else:
+        supabase = _get_supabase()
+        try:
+            supabase.storage.from_(SUPABASE_BUCKET).remove([nombre_storage])
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Error al eliminar el archivo del almacenamiento: {exc}",
+            )
 
     # 4. Eliminar el registro de PostgreSQL
     try:

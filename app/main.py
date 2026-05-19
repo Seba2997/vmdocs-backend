@@ -1,4 +1,6 @@
+import os
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
@@ -23,6 +25,12 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
+
+# En el entorno de testing los archivos se sirven desde disco local
+if os.getenv("STORAGE_BACKEND") == "local":
+    upload_dir = os.getenv("UPLOAD_DIR", "/uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
 
 
