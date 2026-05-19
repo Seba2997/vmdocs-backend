@@ -39,16 +39,10 @@ _SYSTEM_PROMPT = (
 
 # Funciones Groq
 
-def _get_groq_client() -> Groq:
-    """Instancia el cliente de Groq. Lanza 503 si la API KEY no esta configurada."""
+def _get_groq_client() -> Optional[Groq]:
+    """Instancia el cliente de Groq. Retorna None si la API KEY no esta configurada (modo Mock)."""
     if not GROQ_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "El modulo de IA no esta configurado. "
-                "Define GROQ_API_KEY en el archivo .env."
-            ),
-        )
+        return None
     return Groq(api_key=GROQ_API_KEY)
 
 
@@ -103,12 +97,28 @@ def _limpiar_json_raw(raw: str) -> str:
 
 
 def _llamar_groq(
-    client: Groq,
+    client: Optional[Groq],
     user_prompt: str,
     max_tokens: int,
     json_mode: bool = False,
 ) -> str:
-    """Envía un prompt a Groq y retorna la respuesta."""
+    """Envía un prompt a Groq y retorna la respuesta. Si client es None, devuelve Mock."""
+    if client is None:
+        logger.warning("GROQ_API_KEY no detectada. Usando mock IA.")
+        if json_mode:
+            return json.dumps({
+                "tipo_documento": "[SIMULADO] Documento de Prueba",
+                "partes_involucradas": ["[SIMULADO] Parte A", "[SIMULADO] Parte B"],
+                "fechas_importantes": ["[SIMULADO] 2024-01-01 (Firma)", "[SIMULADO] 2024-12-31 (Vencimiento)"],
+                "montos_detectados": ["[SIMULADO] $1.000.000"],
+                "resumen_corto": "[SIMULADO] Este es un resumen simulado porque la clave GROQ_API_KEY no esta configurada."
+            })
+        else:
+            return (
+                "[SIMULADO] Esta es una respuesta generada localmente porque la clave "
+                "GROQ_API_KEY no esta configurada. En produccion, aqui veras el analisis real."
+            )
+
     kwargs = {
         "model": GROQ_MODEL,
         "messages": [

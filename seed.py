@@ -22,7 +22,7 @@ from app.models.caso_model import Caso, FaseCaso
 from app.models.caso_usuario_model import CasoUsuario
 from app.models.documento_model import Documento
 from app.models.notificacion_model import Notificacion
-from app.models.actividad_model import ActividadAuditoria
+from app.models.actividad_model import Actividad
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 engine = create_engine(DATABASE_URL)

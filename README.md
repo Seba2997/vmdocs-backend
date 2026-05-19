@@ -13,81 +13,47 @@ API REST para la plataforma VMDocs, un sistema de gestion documental orientado a
 - Uvicorn (servidor ASGI)
 - PyJWT + Passlib (autenticacion y hashing)
 
-## Requisitos previos
 
-- Python 3.11 o superior
-- Una instancia de PostgreSQL accesible (se usa Supabase por defecto)
-- Un bucket configurado en Supabase Storage
-- Credenciales de Groq API para las funciones de IA (opcional)
-- Credenciales SMTP para recuperacion de contrasena (opcional)
 
-## Instalacion
+## Entorno Local con Docker Compose (Para Revisores/Profesores)
 
-1. Clonar el repositorio:
+Para facilitar la evaluación del proyecto en un entorno local y autocontenido (sin depender de servicios externos), se ha configurado un entorno de Docker.
 
-```
-git clone <url-del-repositorio>
-cd vmdocs-backend
-```
+### Requisitos
+- Docker y Docker Desktop / Compose instalados.
+- Ambos repositorios (`vmdocs-backend` y `vmdocs-frontend`) clonados en la **misma carpeta padre**.
 
-2. Crear y activar un entorno virtual:
+### Instrucciones paso a paso
 
-```
-python -m venv venv
-venv\Scripts\activate       # Windows
-source venv/bin/activate    # Linux / macOS
+1. Clonar ambos repositorios en la misma ubicación:
+```bash
+# Crear y entrar a una carpeta base
+mkdir vmdocs-proyecto && cd vmdocs-proyecto
+
+# Clonar repositorios (reemplaza 'tu-usuario' por tu usuario real de Github)
+git clone https://github.com/tu-usuario/vmdocs-frontend.git
+git clone https://github.com/tu-usuario/vmdocs-backend.git
 ```
 
-3. Instalar dependencias:
-
-```
-pip install -r requirements.txt
-```
-
-4. Configurar las variables de entorno (ver seccion siguiente).
-
-## Variables de entorno
-
-Crear un archivo `.env` en la raiz del proyecto con los siguientes valores:
-
-```
-# Base de datos
-DATABASE_URL=postgresql://<usuario>:<contrasena>@<host>:<puerto>/postgres
-
-# Supabase
-SUPABASE_URL=https://<proyecto>.supabase.co
-SUPABASE_KEY=<service-role-key>
-SUPABASE_BUCKET=vmdocs-documents
-
-# JWT
-SECRET_KEY=<clave-secreta-aleatoria>
-ACCESS_TOKEN_EXPIRE_MINUTES=720
-
-# Documentos
-TAMANO_MAXIMO_MB=50
-
-# Groq AI (opcional)
-GROQ_API_KEY=<clave-groq>
-GROQ_MODEL=llama-3.3-70b-versatile
-GROQ_MAX_CHARS=15000
-
-# SMTP - Recuperacion de contrasena (opcional)
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=<correo>
-SMTP_PASSWORD=<contrasena-de-aplicacion>
+2. Cambiar a la rama de pruebas (`testing`) en ambos repositorios:
+```bash
+cd vmdocs-backend && git checkout testing
+cd ../vmdocs-frontend && git checkout testing
+cd ../vmdocs-backend
 ```
 
-Si `GROQ_API_KEY` o las credenciales de Supabase no estan definidas, el servidor iniciara con advertencias y esos modulos quedaran deshabilitados.
-
-## Ejecutar el servidor
-
-```
-uvicorn app.main:app --reload
+3. Levantar los contenedores:
+```bash
+docker compose up --build -d
 ```
 
-El servidor queda disponible en `http://localhost:8000`.  
-La documentacion interactiva (Swagger UI) se encuentra en `http://localhost:8000/docs`.
+Una vez finalizado, la plataforma estará lista en:
+- **Frontend (Web)**: http://localhost:5173
+- **Backend (API Docs)**: http://localhost:8000/docs
+
+La base de datos local (PostgreSQL) se inicializará automáticamente con usuarios y datos de demostración:
+- **Admin**: `admin@vmdocs.com` / `admin1234`
+- **Abogado**: `abogado@vmdocs.com` / `abogado1234`
 
 ## Estructura del proyecto
 
