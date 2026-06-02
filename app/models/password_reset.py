@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.sql import func
 from app.database import Base
 
+
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
 
