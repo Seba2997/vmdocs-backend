@@ -1,5 +1,9 @@
 # VMDocs Backend
 
+Integrantes:
+- Sebastian Valdebenito
+- Fabian Morales
+
 > [!IMPORTANT]
 > **Nota para Profesores y Revisores:**
 > Existe una rama configurada específicamente para probar y evaluar este proyecto de forma 100% local mediante Docker (sin requerir credenciales externas, con BD local e IA simulada).
